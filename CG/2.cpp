@@ -3,6 +3,7 @@
 #include <gl/freeglut.h>
 #include <gl/freeglut_ext.h> 
 #include <random>
+#include <list>
 
 std::random_device rd;
 
@@ -33,13 +34,17 @@ GLdouble Bvalue = 1.0;
 int width;
 int height;
 
+std::list<ret> rectlist;
+std::list<ret>::iterator rectlist_iter;
+int rectcount = 0;
+
 ret morph(ret& after, ret& before) {
 	int halfwidth = width / 2;
 	int halfheight = height / 2;
     after.x1 = (before.x1 - halfwidth) / halfwidth;
-    after.y1 = (before.y1 - height) / -height;
+    after.y1 = (before.y1 - halfheight) / -halfheight;
     after.x2 = (before.x2 - halfwidth) / halfwidth;
-    after.y2 = (before.y2 - height) / -height;
+    after.y2 = (before.y2 - halfheight) / -halfheight;
 
     //(showingrect[0].x1 - 250) / 250, (showingrect[0].y1 - 250) / -250
 
@@ -121,6 +126,7 @@ void main(int argc, char** argv)
         std::cout << "GLEW Initialized\n";
     width = glutGet(GLUT_WINDOW_WIDTH);
     height = glutGet(GLUT_WINDOW_HEIGHT);
+    
     glutDisplayFunc(drawScene);
     glutReshapeFunc(Reshape);
     glutKeyboardFunc(Keyboard);
@@ -133,7 +139,17 @@ GLvoid drawScene()
     glClearColor(Rvalue, Gvalue, Bvalue, 0.1f);
     glClear(GL_COLOR_BUFFER_BIT);
 
+	ret drawsupport;
+	drawsupport.x1 = 0;
+	drawsupport.y1 = 0;
+	drawsupport.x2 = 250;
+    drawsupport.y2 = 250;
 
+    glPolygonMode(GL_BACK, GL_FILL);
+    ret morphed;
+    morph(morphed, drawsupport);
+    //glColor3f(0, 0, 0);
+    glRectf(morphed.x1, morphed.y1, morphed.x2, morphed.y2);
     
     // 그리기 부분 구현: 그리기 관련 부분이 여기에포함된다.
     glutSwapBuffers();
@@ -142,28 +158,18 @@ GLvoid drawScene()
 GLvoid Reshape(int w, int h)
 {
     glViewport(0, 0, w, h);
-    //--- 필요한 헤더파일 include
-    //--- 윈도우 출력하고 콜백함수 설정
-   // glut 초기화
-   // 디스플레이 모드 설정
-   // 윈도우의 위치 지정
-   // 윈도우의 크기 지정
-   // 윈도우 생성 (윈도우 이름)
-    // glew 초기화
-   // 출력 함수의 지정
-   // 다시 그리기 함수 지정
-   // 이벤트 처리 시작
-   //--- 콜백 함수: 출력 콜백 함수
-   // 바탕색을 ‘blue’ 로 지정
-   // 설정된 색으로 전체를칠하기
-   // 화면에 출력하기
-   //--- 콜백 함수: 다시 그리기 콜백 함수
+
 }
 
 void Keyboard(unsigned char key, int x, int y) {
     switch (key) {
     case 'q': // 프로그램 종료
         glutLeaveMainLoop();
+        break;
+    case 'a':
+    {
+
+    }
         break;
 
     default:
