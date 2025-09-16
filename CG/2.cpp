@@ -174,7 +174,8 @@ void Keyboard(unsigned char key, int x, int y) {
         break;
     case 'a':
     {
-        if (rectcount < 10) {
+        int i = 0;
+        while (rectcount < 30 && i < 10) {
 			ret* newrect = new ret;
 			newrect->x1 = numdis(gen);
 			newrect->y1 = numdis(gen);
@@ -185,6 +186,7 @@ void Keyboard(unsigned char key, int x, int y) {
 			newrect->Bvalue = dis(gen) / 256.0f;
 			rectlist.push_back(*newrect);
 			rectcount++;
+			i++;
         }
     }
         break;
