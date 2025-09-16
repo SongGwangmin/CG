@@ -224,7 +224,83 @@ void Mouse(int button, int state, int x, int y)
     break;
     case GLUT_RIGHT_BUTTON:
     {
+        if (state == GLUT_DOWN) {
+            if (!rectlist.empty()) {
+                for (auto it = rectlist.rbegin(); it != rectlist.rend(); ++it) {
+                    if (ptinrect(x, y, *it)) {
+                        rectlist_iter = std::prev(it.base());
+                        
+                        if (rectcount < 29) { // 2개를 추가할 것이므로 29 미만일 때
+                            // rectlist_iter의 사각형 범위 저장
+                            GLdouble minX = rectlist_iter->x1;
+                            GLdouble minY = rectlist_iter->y1;
+                            GLdouble maxX = rectlist_iter->x2;
+                            GLdouble maxY = rectlist_iter->y2;
+                            GLdouble width = maxX - minX;
+                            GLdouble height = maxY - minY;
+                            
+                            // 첫 번째 새로운 사각형 생성
+                            std::uniform_real_distribution<GLdouble> xDis(minX, maxX);
+                            std::uniform_real_distribution<GLdouble> yDis(minY, maxY);
+                            
+                            ret newrect1;
+                            newrect1.x1 = xDis(gen);
+                            newrect1.y1 = yDis(gen);
+                            newrect1.x2 = xDis(gen);
+                            newrect1.y2 = yDis(gen);
+                            
+                            // newrect1 정규화: x2 > x1, y2 > y1이 되도록 보장
+                            if (newrect1.x2 < newrect1.x1) {
+                                std::swap(newrect1.x1, newrect1.x2);
+                            }
+                            if (newrect1.y2 < newrect1.y1) {
+                                std::swap(newrect1.y1, newrect1.y2);
+                            }
+                            
+                            newrect1.Rvalue = dis(gen) / 256.0f;
+                            newrect1.Gvalue = dis(gen) / 256.0f;
+                            newrect1.Bvalue = dis(gen) / 256.0f;
 
+                            
+                            
+                            // 두 번째 새로운 사각형 생성
+                            ret newrect2;
+                            newrect2.x1 = xDis(gen);
+                            newrect2.y1 = yDis(gen);
+                            newrect2.x2 = xDis(gen);
+                            newrect2.y2 = yDis(gen);
+                            
+                            // newrect2 정규화: x2 > x1, y2 > y1이 되도록 보장
+                            if (newrect2.x2 < newrect2.x1) {
+                                std::swap(newrect2.x1, newrect2.x2);
+                            }
+                            if (newrect2.y2 < newrect2.y1) {
+                                std::swap(newrect2.y1, newrect2.y2);
+                            }
+                            
+                            newrect2.Rvalue = dis(gen) / 256.0f;
+                            newrect2.Gvalue = dis(gen) / 256.0f;
+                            newrect2.Bvalue = dis(gen) / 256.0f;
+                            
+                            // 두 개의 새로운 사각형을 리스트에 추가
+                            rectlist.push_back(newrect1);
+                            rectlist.push_back(newrect2);
+                            rectcount += 2;
+                            
+                            // 원래 사각형 삭제
+                            rectlist.erase(rectlist_iter);
+							rectlist_iter = rectlist.end();
+                            rectcount--;
+                            
+                            glutPostRedisplay();
+                        }
+
+                        break;
+                    }
+                    rectlist_iter = rectlist.end();
+                }
+            }
+        }
     }
     break;
     default:
