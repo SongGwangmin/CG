@@ -4,6 +4,7 @@
 #include <gl/freeglut_ext.h> 
 #include <random>
 #include <list>
+#include <algorithm>
 
 #define rectspace 30
 
@@ -62,19 +63,7 @@ ret morph(ret& after, ret& before) {
     return after;
 }
 
-static ret hidingrect[4] = {
-    {  0,   0, 250, 250 }, // 왼쪽 아래
-    {250,   0, 500, 250 }, // 오른쪽 아래
-    {  0, 250, 250, 500 }, // 왼쪽 위
-    {250, 250, 500, 500 }  // 오른쪽 위
-};
-
-static ret showingrect[4] = {
-    {  0,   0, 250, 250 },
-    {250,   0, 500, 250 },
-    {  0, 250, 250, 500 },
-    {250, 250, 500, 500 }
-};
+bool isColliding(const ret& a, const ret& b);
 
 bool ptinrect(int x, int y, ret& rect) {
     return (x >= rect.x1 && x <= rect.x2 && y >= rect.y1 && y <= rect.y2);
@@ -194,9 +183,9 @@ void Mouse(int button, int state, int x, int y)
     {
         if (state == GLUT_DOWN) {
             if (!rectlist.empty()) {
-                for (auto it = rectlist.begin(); it != rectlist.end(); ++it) {
-                    if (ptinrect(x, y, *(it))) {
-                        rectlist_iter = it;
+                for (auto it = rectlist.rbegin(); it != rectlist.rend(); ++it) {
+                    if (ptinrect(x, y, *it)) {
+                        rectlist_iter = std::prev(it.base());
                         mousexstart = x;
                         mouseystart = y;
                         break;
@@ -206,7 +195,28 @@ void Mouse(int button, int state, int x, int y)
             }
         }
         else if (state == GLUT_UP) {
-            if (!rectlist.empty()) {
+            if (!rectlist.empty() && rectlist_iter != rectlist.end()) {
+                for (auto it = rectlist.begin(); it != rectlist.end(); ++it) {
+                    if (it != rectlist_iter && isColliding(*rectlist_iter, *it)) {
+                        // 더 작은 값으로 x1, y1 설정
+                        rectlist_iter->x1 = std::min(rectlist_iter->x1, it->x1);
+                        rectlist_iter->y1 = std::min(rectlist_iter->y1, it->y1);
+                        
+                        // 더 큰 값으로 x2, y2 설정
+                        rectlist_iter->x2 = std::max(rectlist_iter->x2, it->x2);
+                        rectlist_iter->y2 = std::max(rectlist_iter->y2, it->y2);
+                        
+                        // 새로운 색상 적용
+                        rectlist_iter->Rvalue = dis(gen) / 256.0f;
+                        rectlist_iter->Gvalue = dis(gen) / 256.0f;
+                        rectlist_iter->Bvalue = dis(gen) / 256.0f;
+                        
+                        // 충돌한 사각형 삭제
+                        rectlist.erase(it);
+                        rectcount--;
+                        break; // erase 후 반복자가 무효화되므로 루프 종료
+                    }
+                }
                 rectlist_iter = rectlist.end();
             }
 		}
@@ -242,4 +252,11 @@ void Motion(int x, int y)
             glutPostRedisplay();
         }
     }
+}
+
+bool isColliding(const ret& a, const ret& b) {
+    return !(a.x2 <= b.x1 || // A가 B의 왼쪽에 있음
+        a.x1 >= b.x2 || // A가 B의 오른쪽에 있음
+        a.y2 <= b.y1 || // A가 B의 아래에 있음
+        a.y1 >= b.y2);  // A가 B의 위에 있음
 }
