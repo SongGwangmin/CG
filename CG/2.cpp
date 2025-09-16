@@ -5,13 +5,17 @@
 #include <random>
 #include <list>
 
+#define rectspace 30
+
 std::random_device rd;
 
 // random_device 를 통해 난수 생성 엔진을 초기화 한다.
 std::mt19937 gen(rd());
 
+
 // 0 부터 99 까지 균등하게 나타나는 난수열을 생성하기 위해 균등 분포 정의.
 std::uniform_int_distribution<int> dis(0, 256);
+std::uniform_int_distribution<int> numdis(0, 500 - rectspace);
 
 typedef struct RET {
     GLdouble x1, y1, x2, y2;
@@ -35,7 +39,6 @@ int width;
 int height;
 
 std::list<ret> rectlist;
-std::list<ret>::iterator rectlist_iter;
 int rectcount = 0;
 
 ret morph(ret& after, ret& before) {
@@ -146,10 +149,13 @@ GLvoid drawScene()
     drawsupport.y2 = 250;
 
     glPolygonMode(GL_BACK, GL_FILL);
-    ret morphed;
-    morph(morphed, drawsupport);
-    //glColor3f(0, 0, 0);
-    glRectf(morphed.x1, morphed.y1, morphed.x2, morphed.y2);
+
+    for (auto it = rectlist.begin(); it != rectlist.end(); ++it) {
+        ret morphed;
+        morph(morphed, *(it));
+        glColor3f(it->Rvalue, it->Gvalue, it->Bvalue);
+        glRectf(morphed.x1, morphed.y1, morphed.x2, morphed.y2);
+    }
     
     // 그리기 부분 구현: 그리기 관련 부분이 여기에포함된다.
     glutSwapBuffers();
@@ -168,7 +174,18 @@ void Keyboard(unsigned char key, int x, int y) {
         break;
     case 'a':
     {
-
+        if (rectcount < 10) {
+			ret* newrect = new ret;
+			newrect->x1 = numdis(gen);
+			newrect->y1 = numdis(gen);
+			newrect->x2 = newrect->x1 + rectspace;
+			newrect->y2 = newrect->y1 + rectspace;
+			newrect->Rvalue = dis(gen) / 256.0f;
+			newrect->Gvalue = dis(gen) / 256.0f;
+			newrect->Bvalue = dis(gen) / 256.0f;
+			rectlist.push_back(*newrect);
+			rectcount++;
+        }
     }
         break;
 
