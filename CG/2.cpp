@@ -12,6 +12,8 @@ std::random_device rd;
 // random_device 를 통해 난수 생성 엔진을 초기화 한다.
 std::mt19937 gen(rd());
 
+static int mousexstart, mouseystart;
+static int mousexend, mouseyend;
 
 // 0 부터 99 까지 균등하게 나타나는 난수열을 생성하기 위해 균등 분포 정의.
 std::uniform_int_distribution<int> dis(0, 256);
@@ -39,6 +41,7 @@ int width;
 int height;
 
 std::list<ret> rectlist;
+std::list<ret>::iterator rectlist_iter;
 int rectcount = 0;
 
 ret morph(ret& after, ret& before) {
@@ -77,24 +80,8 @@ bool ptinrect(int x, int y, ret& rect) {
     return (x >= rect.x1 && x <= rect.x2 && y >= rect.y1 && y <= rect.y2);
 }
 
-void Mouse(int button, int state, int x, int y)
-{
-    switch (button) {
-    case GLUT_LEFT_BUTTON:
-    {
+void Mouse(int button, int state, int x, int y);
 
-    }
-    break;
-    case GLUT_RIGHT_BUTTON:
-    {
-
-    }
-    break;
-    default:
-        break;
-
-    }
-}
 
 // 타이머 콜백 (glutTimerFunc 등에서 호출될 함수 예시)
 void TimerFunc(int value) {
@@ -109,6 +96,7 @@ void TimerFunc(int value) {
     }
 }
 
+void Motion(int x, int y);
 
 void main(int argc, char** argv)
 {
@@ -134,6 +122,7 @@ void main(int argc, char** argv)
     glutReshapeFunc(Reshape);
     glutKeyboardFunc(Keyboard);
     glutMouseFunc(Mouse);
+    glutMotionFunc(Motion);
     glutMainLoop();
 }
 
@@ -196,4 +185,56 @@ void Keyboard(unsigned char key, int x, int y) {
     }
 
     glutPostRedisplay();
+}
+
+void Mouse(int button, int state, int x, int y)
+{
+    switch (button) {
+    case GLUT_LEFT_BUTTON:
+    {
+        if (state == GLUT_DOWN) {
+            for (auto it = rectlist.begin(); it != rectlist.end(); ++it) {
+                if (ptinrect(x, y, *(it))) {
+					rectlist_iter = it;
+					mousexstart = x;
+					mouseystart = y;
+                    break;
+                }
+                rectlist_iter = rectlist.end();
+            }
+        }
+        else if (state == GLUT_UP) {
+			rectlist_iter = rectlist.end();
+		}
+    }
+    break;
+    case GLUT_RIGHT_BUTTON:
+    {
+
+    }
+    break;
+    default:
+        break;
+
+    }
+}
+
+void Motion(int x, int y)
+{
+    
+    if (rectlist_iter != rectlist.end()) {
+		mousexend = x;
+		mouseyend = y;
+
+		int dx = mousexend - mousexstart;
+		int dy = mouseyend - mouseystart;
+		mousexstart = mousexend;
+		mouseystart = mouseyend;
+
+        rectlist_iter->x1 += dx;
+        rectlist_iter->y1 += dy;
+        rectlist_iter->x2 += dx;
+        rectlist_iter->y2 += dy;
+        glutPostRedisplay();
+	}
 }
