@@ -228,17 +228,24 @@ void Mouse(int button, int state, int x, int y)
             if (!rectlist.empty()) {
                 for (auto it = rectlist.rbegin(); it != rectlist.rend(); ++it) {
                     if (ptinrect(x, y, *it)) {
+                        // 우클릭으로 사각형 누르면 못움직이게 하기
+						mousexstart = -1;
+                        mouseystart = -1;
                         rectlist_iter = std::prev(it.base());
                         
-                        if (rectcount < 29) { // 2개를 추가할 것이므로 29 미만일 때
+                        if (rectcount < 30) { // 2개를 추가할 것이므로 29 미만일 때
                             // rectlist_iter의 사각형 범위 저장
-                            GLdouble minX = rectlist_iter->x1;
-                            GLdouble minY = rectlist_iter->y1;
-                            GLdouble maxX = rectlist_iter->x2;
-                            GLdouble maxY = rectlist_iter->y2;
-                            GLdouble width = maxX - minX;
-                            GLdouble height = maxY - minY;
+                            GLdouble minX = rectlist_iter->x1 - 10;
+                            GLdouble minY = rectlist_iter->y1 - 10;
+                            GLdouble maxX = rectlist_iter->x2 + 10;
+                            GLdouble maxY = rectlist_iter->y2 + 10;
                             
+                            // 화면 범위(0~500)를 벗어나지 않도록 경계 검사
+                            if (minX < 0) minX = 0;
+                            if (minY < 0) minY = 0;
+                            if (maxX > 500) maxX = 500;
+                            if (maxY > 500) maxY = 500;
+
                             // 첫 번째 새로운 사각형 생성
                             std::uniform_real_distribution<GLdouble> xDis(minX, maxX);
                             std::uniform_real_distribution<GLdouble> yDis(minY, maxY);
@@ -312,20 +319,22 @@ void Mouse(int button, int state, int x, int y)
 void Motion(int x, int y)
 {
     if (!rectlist.empty()) {
-        if (rectlist_iter != rectlist.end()) {
-            mousexend = x;
-            mouseyend = y;
+        if (mousexstart != -1) {
+            if (rectlist_iter != rectlist.end()) {
+                mousexend = x;
+                mouseyend = y;
 
-            int dx = mousexend - mousexstart;
-            int dy = mouseyend - mouseystart;
-            mousexstart = mousexend;
-            mouseystart = mouseyend;
+                int dx = mousexend - mousexstart;
+                int dy = mouseyend - mouseystart;
+                mousexstart = mousexend;
+                mouseystart = mouseyend;
 
-            rectlist_iter->x1 += dx;
-            rectlist_iter->y1 += dy;
-            rectlist_iter->x2 += dx;
-            rectlist_iter->y2 += dy;
-            glutPostRedisplay();
+                rectlist_iter->x1 += dx;
+                rectlist_iter->y1 += dy;
+                rectlist_iter->x2 += dx;
+                rectlist_iter->y2 += dy;
+                glutPostRedisplay();
+            }
         }
     }
 }
