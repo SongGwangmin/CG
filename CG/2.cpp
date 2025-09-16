@@ -193,18 +193,22 @@ void Mouse(int button, int state, int x, int y)
     case GLUT_LEFT_BUTTON:
     {
         if (state == GLUT_DOWN) {
-            for (auto it = rectlist.begin(); it != rectlist.end(); ++it) {
-                if (ptinrect(x, y, *(it))) {
-					rectlist_iter = it;
-					mousexstart = x;
-					mouseystart = y;
-                    break;
+            if (!rectlist.empty()) {
+                for (auto it = rectlist.begin(); it != rectlist.end(); ++it) {
+                    if (ptinrect(x, y, *(it))) {
+                        rectlist_iter = it;
+                        mousexstart = x;
+                        mouseystart = y;
+                        break;
+                    }
+                    rectlist_iter = rectlist.end();
                 }
-                rectlist_iter = rectlist.end();
             }
         }
         else if (state == GLUT_UP) {
-			rectlist_iter = rectlist.end();
+            if (!rectlist.empty()) {
+                rectlist_iter = rectlist.end();
+            }
 		}
     }
     break;
@@ -221,20 +225,21 @@ void Mouse(int button, int state, int x, int y)
 
 void Motion(int x, int y)
 {
-    
-    if (rectlist_iter != rectlist.end()) {
-		mousexend = x;
-		mouseyend = y;
+    if (!rectlist.empty()) {
+        if (rectlist_iter != rectlist.end()) {
+            mousexend = x;
+            mouseyend = y;
 
-		int dx = mousexend - mousexstart;
-		int dy = mouseyend - mouseystart;
-		mousexstart = mousexend;
-		mouseystart = mouseyend;
+            int dx = mousexend - mousexstart;
+            int dy = mouseyend - mouseystart;
+            mousexstart = mousexend;
+            mouseystart = mouseyend;
 
-        rectlist_iter->x1 += dx;
-        rectlist_iter->y1 += dy;
-        rectlist_iter->x2 += dx;
-        rectlist_iter->y2 += dy;
-        glutPostRedisplay();
-	}
+            rectlist_iter->x1 += dx;
+            rectlist_iter->y1 += dy;
+            rectlist_iter->x2 += dx;
+            rectlist_iter->y2 += dy;
+            glutPostRedisplay();
+        }
+    }
 }
