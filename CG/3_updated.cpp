@@ -73,6 +73,11 @@ std::uniform_real_distribution<GLdouble> morphDis(-5.0, 5.0); // -5에서 5 사이 �
 bool colorMode = false;     // 색상 변화 모드 여부
 std::uniform_real_distribution<GLdouble> colorDis(0.0, 1.0); // 0.0에서 1.0 사이 난수
 
+// 랜덤 애니메이션 따라하기 모드용 변수
+bool randomFollowMode = false;  // 랜덤 애니메이션 따라하기 모드 여부
+int randomSelectedRect = -1;    // 랜덤으로 선택된 사각형 인덱스
+ret previousTargetState;        // 타겟 사각형의 이전 상태 저장 (3번 모드용)
+
 
 ret morph(ret& after, ret& before) {
     int halfwidth = width / 2;
@@ -100,6 +105,134 @@ bool ptinrect(int x, int y, ret& rect) {
 
 void Mouse(int button, int state, int x, int y);
 
+// 랜덤 애니메이션 따라하기 업데이트 함수
+void UpdateRandomFollowAnimation() {
+    if (!randomFollowMode || randomSelectedRect == -1 || rectCount < 2) return;
+    
+    // 현재 모든 사각형의 위치를 이전 위치로 저장
+    for (int i = 0; i < rectCount; ++i) {
+        previousPos[i] = showingrect[i];
+    }
+    
+    // 타겟 사각형의 이전 상태 저장 (3번 모드용)
+    previousTargetState = showingrect[randomSelectedRect];
+    
+    // 타겟 사각형이 현재 활성화된 애니메이션 실행
+    if (bounceMode) {
+        // 1번 모드: 대각선 튕기기 (타겟 사각형만, 속도 3배 증가)
+        showingrect[randomSelectedRect].x1 += velocityX[randomSelectedRect] * 5.0;
+        showingrect[randomSelectedRect].y1 += velocityY[randomSelectedRect] * 5.0;
+        showingrect[randomSelectedRect].x2 += velocityX[randomSelectedRect] * 5.0;
+        showingrect[randomSelectedRect].y2 += velocityY[randomSelectedRect] * 5.0;
+        
+        // 경계 충돌 처리 - 올바른 크기 유지 방식
+        GLdouble rectWidth = showingrect[randomSelectedRect].x2 - showingrect[randomSelectedRect].x1;
+        GLdouble rectHeight = showingrect[randomSelectedRect].y2 - showingrect[randomSelectedRect].y1;
+        
+        if (showingrect[randomSelectedRect].x1 <= 0) {
+            showingrect[randomSelectedRect].x2 = rectWidth;
+            showingrect[randomSelectedRect].x1 = 0;
+            velocityX[randomSelectedRect] = -velocityX[randomSelectedRect];
+        }
+        else if (showingrect[randomSelectedRect].x2 >= 500) {
+            showingrect[randomSelectedRect].x1 = 500 - rectWidth;
+            showingrect[randomSelectedRect].x2 = 500;
+            velocityX[randomSelectedRect] = -velocityX[randomSelectedRect];
+        }
+        if (showingrect[randomSelectedRect].y1 <= 0) {
+            showingrect[randomSelectedRect].y2 = rectHeight;
+            showingrect[randomSelectedRect].y1 = 0;
+            velocityY[randomSelectedRect] = -velocityY[randomSelectedRect];
+        }
+        else if (showingrect[randomSelectedRect].y2 >= 500) {
+            showingrect[randomSelectedRect].y1 = 500 - rectHeight;
+            showingrect[randomSelectedRect].y2 = 500;
+            velocityY[randomSelectedRect] = -velocityY[randomSelectedRect];
+        }
+    }
+    else if (zigzagMode) {
+        // 2번 모드: 지그재그 (타겟 사각형만, 속도 3배 증가)
+        showingrect[randomSelectedRect].x1 += zigzagSpeedX[randomSelectedRect] * 10.0;
+        showingrect[randomSelectedRect].x2 += zigzagSpeedX[randomSelectedRect] * 10.0;
+        
+        if (showingrect[randomSelectedRect].x1 <= 0 || showingrect[randomSelectedRect].x2 >= 500) {
+            zigzagSpeedX[randomSelectedRect] = -zigzagSpeedX[randomSelectedRect];
+            std::uniform_real_distribution<GLdouble> yChangeDis(-ZIGZAG_Y_CHANGE, ZIGZAG_Y_CHANGE);
+            GLdouble yChange = yChangeDis(gen);
+            showingrect[randomSelectedRect].y1 += yChange;
+            showingrect[randomSelectedRect].y2 += yChange;
+        }
+    }
+    else if (morphMode) {
+        // 3번 모드: 형태 변화 (타겟 사각형만)
+        showingrect[randomSelectedRect].x1 += morphDis(gen);
+        showingrect[randomSelectedRect].y1 += morphDis(gen);
+        showingrect[randomSelectedRect].x2 += morphDis(gen);
+        showingrect[randomSelectedRect].y2 += morphDis(gen);
+        
+        // 정규화
+        if (showingrect[randomSelectedRect].x1 > showingrect[randomSelectedRect].x2) {
+            std::swap(showingrect[randomSelectedRect].x1, showingrect[randomSelectedRect].x2);
+        }
+        if (showingrect[randomSelectedRect].y1 > showingrect[randomSelectedRect].y2) {
+            std::swap(showingrect[randomSelectedRect].y1, showingrect[randomSelectedRect].y2);
+        }
+    }
+    else if (colorMode) {
+        // 4번 모드: 색상 변화 (타겟 사각형만)
+        showingrect[randomSelectedRect].Rvalue = colorDis(gen);
+        showingrect[randomSelectedRect].Gvalue = colorDis(gen);
+        showingrect[randomSelectedRect].Bvalue = colorDis(gen);
+    }
+    
+    // 나머지 사각형들이 타겟 사각형을 따라하기
+    for (int i = 0; i < rectCount; ++i) {
+        if (i != randomSelectedRect) {
+            if (bounceMode || zigzagMode) {
+                // 1,2번 모드: 순간이동 따라가기 방식 (체인 형성)
+                // 각 사각형의 현재 크기 계산
+                GLdouble rectWidth = showingrect[i].x2 - showingrect[i].x1;
+                GLdouble rectHeight = showingrect[i].y2 - showingrect[i].y1;
+                
+                // 타겟 사각형의 이전 중심 좌표 (바로 직전 위치)
+                GLdouble prevTargetCenterX = (previousPos[randomSelectedRect].x1 + previousPos[randomSelectedRect].x2) / 2;
+                GLdouble prevTargetCenterY = (previousPos[randomSelectedRect].y1 + previousPos[randomSelectedRect].y2) / 2;
+                
+                // 타겟의 바로 직전 좌표로 순간이동
+                showingrect[i].x1 = prevTargetCenterX - rectWidth / 2;
+                showingrect[i].y1 = prevTargetCenterY - rectHeight / 2;
+                showingrect[i].x2 = prevTargetCenterX + rectWidth / 2;
+                showingrect[i].y2 = prevTargetCenterY + rectHeight / 2;
+            }
+            else if (morphMode) {
+                // 3번 모드: 좌표 변화량 따라하기
+                GLdouble dx1 = showingrect[randomSelectedRect].x1 - previousTargetState.x1;
+                GLdouble dy1 = showingrect[randomSelectedRect].y1 - previousTargetState.y1;
+                GLdouble dx2 = showingrect[randomSelectedRect].x2 - previousTargetState.x2;
+                GLdouble dy2 = showingrect[randomSelectedRect].y2 - previousTargetState.y2;
+                
+                showingrect[i].x1 += dx1;
+                showingrect[i].y1 += dy1;
+                showingrect[i].x2 += dx2;
+                showingrect[i].y2 += dy2;
+                
+                // 정규화
+                if (showingrect[i].x1 > showingrect[i].x2) {
+                    std::swap(showingrect[i].x1, showingrect[i].x2);
+                }
+                if (showingrect[i].y1 > showingrect[i].y2) {
+                    std::swap(showingrect[i].y1, showingrect[i].y2);
+                }
+            }
+            else if (colorMode) {
+                // 4번 모드: 색상 따라하기
+                showingrect[i].Rvalue = showingrect[randomSelectedRect].Rvalue;
+                showingrect[i].Gvalue = showingrect[randomSelectedRect].Gvalue;
+                showingrect[i].Bvalue = showingrect[randomSelectedRect].Bvalue;
+            }
+        }
+    }
+}
 
 // 따라가기 애니메이션 업데이트 함수 (순간이동 방식)
 void UpdateFollowAnimation() {
@@ -199,7 +332,7 @@ void UpdateFollowAnimation() {
 
 // 대각선 이동 및 튕기기 업데이트 함수
 void UpdateBounceAnimation() {
-    if (!bounceMode) return;
+    if (!bounceMode || randomFollowMode) return;  // 랜덤 모드일 때는 실행하지 않음
     
     for (int i = 0; i < rectCount; ++i) {
         // 현재 위치 업데이트
@@ -208,30 +341,33 @@ void UpdateBounceAnimation() {
         showingrect[i].x2 += velocityX[i];
         showingrect[i].y2 += velocityY[i];
         
-        // 경계 충돌 검사 및 튕기기 (500x500 윈도우)
+        // 경계 충돌 검사 및 튕기기 (500x500 윈도우) - 올바른 크기 유지 방식
+        GLdouble rectWidth = showingrect[i].x2 - showingrect[i].x1;
+        GLdouble rectHeight = showingrect[i].y2 - showingrect[i].y1;
+        
         // 왼쪽 경계 충돌
         if (showingrect[i].x1 <= 0) {
+            showingrect[i].x2 = rectWidth;
             showingrect[i].x1 = 0;
-            showingrect[i].x2 = showingrect[i].x2 - showingrect[i].x1;
             velocityX[i] = -velocityX[i]; // X 방향 반전
         }
         // 오른쪽 경계 충돌
         else if (showingrect[i].x2 >= 500) {
+            showingrect[i].x1 = 500 - rectWidth;
             showingrect[i].x2 = 500;
-            showingrect[i].x1 = 500 - (showingrect[i].x2 - showingrect[i].x1);
             velocityX[i] = -velocityX[i]; // X 방향 반전
         }
         
         // 위쪽 경계 충돌
         if (showingrect[i].y1 <= 0) {
+            showingrect[i].y2 = rectHeight;
             showingrect[i].y1 = 0;
-            showingrect[i].y2 = showingrect[i].y2 - showingrect[i].y1;
             velocityY[i] = -velocityY[i]; // Y 방향 반전
         }
         // 아래쪽 경계 충돌
         else if (showingrect[i].y2 >= 500) {
+            showingrect[i].y1 = 500 - rectHeight;
             showingrect[i].y2 = 500;
-            showingrect[i].y1 = 500 - (showingrect[i].y2 - showingrect[i].y1);
             velocityY[i] = -velocityY[i]; // Y 방향 반전
         }
     }
@@ -239,22 +375,21 @@ void UpdateBounceAnimation() {
 
 // 지그재그 애니메이션 업데이트 함수 (직선 형태)
 void UpdateZigzagAnimation() {
-    if (!zigzagMode) return;
+    if (!zigzagMode || randomFollowMode) return;  // 랜덤 모드일 때는 실행하지 않음
     
     for (int i = 0; i < rectCount; ++i) {
         // X 방향으로만 이동 (직선)
         showingrect[i].x1 += zigzagSpeedX[i];
         showingrect[i].x2 += zigzagSpeedX[i];
         
-        // 경계 충돌 검사 및 처리 (500x500 윈도우)
+        // 경계 충돌 검사 및 처리 (500x500 윈도우) - 올바른 크기 유지 방식
         // X 방향 경계 충돌 - 방향 반전 + Y 좌표 변경
+        GLdouble rectWidth = showingrect[i].x2 - showingrect[i].x1;
+        GLdouble rectHeight = showingrect[i].y2 - showingrect[i].y1;
+        
         if (showingrect[i].x1 <= 0) {
-            // 현재 사각형의 실제 폭과 높이 계산
-            GLdouble rectWidth = showingrect[i].x2 - showingrect[i].x1;
-            GLdouble rectHeight = showingrect[i].y2 - showingrect[i].y1;
-            
+            showingrect[i].x2 = rectWidth;
             showingrect[i].x1 = 0;
-            showingrect[i].x2 = rectWidth; // 실제 폭 유지
             zigzagSpeedX[i] = -zigzagSpeedX[i]; // X 방향 반전
             
             // Y 좌표 랜덤하게 변경 (지그재그 효과)
@@ -266,23 +401,17 @@ void UpdateZigzagAnimation() {
             
             // Y 경계 체크 후 조정
             if (showingrect[i].y1 < 0) {
-                GLdouble overflow = -showingrect[i].y1;
+                showingrect[i].y2 = rectHeight;
                 showingrect[i].y1 = 0;
-                showingrect[i].y2 = rectHeight; // 실제 높이 유지
             }
             else if (showingrect[i].y2 > 500) {
-                GLdouble overflow = showingrect[i].y2 - 500;
+                showingrect[i].y1 = 500 - rectHeight;
                 showingrect[i].y2 = 500;
-                showingrect[i].y1 = 500 - rectHeight; // 실제 높이 유지
             }
         }
         else if (showingrect[i].x2 >= 500) {
-            // 현재 사각형의 실제 폭과 높이 계산
-            GLdouble rectWidth = showingrect[i].x2 - showingrect[i].x1;
-            GLdouble rectHeight = showingrect[i].y2 - showingrect[i].y1;
-            
+            showingrect[i].x1 = 500 - rectWidth;
             showingrect[i].x2 = 500;
-            showingrect[i].x1 = 500 - rectWidth; // 실제 폭 유지
             zigzagSpeedX[i] = -zigzagSpeedX[i]; // X 방향 반전
             
             // Y 좌표 랜덤하게 변경 (지그재그 효과)
@@ -294,14 +423,12 @@ void UpdateZigzagAnimation() {
             
             // Y 경계 체크 후 조정
             if (showingrect[i].y1 < 0) {
-                GLdouble overflow = -showingrect[i].y1;
+                showingrect[i].y2 = rectHeight;
                 showingrect[i].y1 = 0;
-                showingrect[i].y2 = rectHeight; // 실제 높이 유지
             }
             else if (showingrect[i].y2 > 500) {
-                GLdouble overflow = showingrect[i].y2 - 500;
+                showingrect[i].y1 = 500 - rectHeight;
                 showingrect[i].y2 = 500;
-                showingrect[i].y1 = 500 - rectHeight; // 실제 높이 유지
             }
         }
     }
@@ -309,7 +436,7 @@ void UpdateZigzagAnimation() {
 
 // 형태 변화 애니메이션 업데이트 함수
 void UpdateMorphAnimation() {
-    if (!morphMode) return;
+    if (!morphMode || randomFollowMode) return;  // 랜덤 모드일 때는 실행하지 않음
     
     for (int i = 0; i < rectCount; ++i) {
         // 원래 좌표 저장
@@ -379,7 +506,7 @@ void UpdateMorphAnimation() {
 
 // 색상 변화 애니메이션 업데이트 함수
 void UpdateColorAnimation() {
-    if (!colorMode) return;
+    if (!colorMode || randomFollowMode) return;  // 랜덤 모드일 때는 실행하지 않음
     
     for (int i = 0; i < rectCount; ++i) {
         // 각 사각형의 색상을 지속적으로 변경
@@ -403,24 +530,26 @@ void TimerFunc(int value) {
         UpdateFollowAnimation();
     }
     
-    // 대각선 튕기기 애니메이션 업데이트
-    if (bounceMode) {
-        UpdateBounceAnimation();
-    }
-    
-    // 지그재그 애니메이션 업데이트
-    if (zigzagMode) {
-        UpdateZigzagAnimation();
-    }
-    
-    // 형태 변화 애니메이션 업데이트
-    if (morphMode) {
-        UpdateMorphAnimation();
-    }
-    
-    // 색상 변화 애니메이션 업데이트
-    if (colorMode) {
-        UpdateColorAnimation();
+    // 랜덤 애니메이션 따라하기 업데이트
+    if (randomFollowMode) {
+        UpdateRandomFollowAnimation();
+    } else {
+        // 일반 애니메이션 업데이트 (랜덤 모드 아닐 때만)
+        if (bounceMode) {
+            UpdateBounceAnimation();
+        }
+        
+        if (zigzagMode) {
+            UpdateZigzagAnimation();
+        }
+        
+        if (morphMode) {
+            UpdateMorphAnimation();
+        }
+        
+        if (colorMode) {
+            UpdateColorAnimation();
+        }
     }
     
     glutPostRedisplay();
@@ -492,12 +621,8 @@ GLvoid drawScene()
         ret morphed;
         morph(morphed, showingrect[i]);
         
-        // 선택된 사각형은 다른 색으로 표시
-        if (i == selectedRect && followMode) {
-            glColor3f(1.0f, 1.0f, 1.0f); // 흰색으로 강조
-        } else {
-            glColor3f(showingrect[i].Rvalue, showingrect[i].Gvalue, showingrect[i].Bvalue);
-        }
+        // 모든 사각형을 일반 색상으로 표시 (강조 표시 완전 제거)
+        glColor3f(showingrect[i].Rvalue, showingrect[i].Gvalue, showingrect[i].Bvalue);
         
         glRectf(morphed.x1, morphed.y1, morphed.x2, morphed.y2);
     }
@@ -518,12 +643,14 @@ void Keyboard(unsigned char key, int x, int y) {
         glutLeaveMainLoop();
         break;
     case '1': // 대각선 이동 및 튕기기 모드
-        // 다른 모드 해제 (2번, 3번, 4번 모드 포함)
+        // 다른 모드 해제 (2번, 3번, 4번, 5번 모드 포함)
         followMode = false;
         selectedRect = -1;
         zigzagMode = false; // 2번 모드 해제
         morphMode = false;  // 3번 모드 해제
         colorMode = false;  // 4번 모드 해제
+        randomFollowMode = false;  // 5번 모드 해제
+        randomSelectedRect = -1;
         
         // 튕기기 모드 토글
         bounceMode = !bounceMode;
@@ -546,12 +673,14 @@ void Keyboard(unsigned char key, int x, int y) {
         }
         break;
     case '2': // 지그재그 이동 모드
-        // 다른 모드 해제 (1번, 3번, 4번 모드 포함)
+        // 다른 모드 해제 (1번, 3번, 4번, 5번 모드 포함)
         followMode = false;
         selectedRect = -1;
         bounceMode = false; // 1번 모드 해제
         morphMode = false;  // 3번 모드 해제
         colorMode = false;  // 4번 모드 해제
+        randomFollowMode = false;  // 5번 모드 해제
+        randomSelectedRect = -1;
         
         // 지그재그 모드 토글
         zigzagMode = !zigzagMode;
@@ -572,26 +701,47 @@ void Keyboard(unsigned char key, int x, int y) {
         }
         break;
     case '3': // 형태 변화 모드
-        // 다른 모드 해제 (1번, 2번, 4번 모드 포함)
+        // 다른 모드 해제 (1번, 2번, 4번, 5번 모드 포함)
         followMode = false;
         selectedRect = -1;
         bounceMode = false;  // 1번 모드 해제
         zigzagMode = false;  // 2번 모드 해제
         colorMode = false;   // 4번 모드 해제
+        randomFollowMode = false;  // 5번 모드 해제
+        randomSelectedRect = -1;
         
         // 형태 변화 모드 토글
         morphMode = !morphMode;
         break;
     case '4': // 색상 변화 모드
-        // 다른 모드 해제 (1번, 2번, 3번 모드 포함)
+        // 다른 모드 해제 (1번, 2번, 3번, 5번 모드 포함)
         followMode = false;
         selectedRect = -1;
         bounceMode = false;  // 1번 모드 해제
         zigzagMode = false;  // 2번 모드 해제
         morphMode = false;   // 3번 모드 해제
+        randomFollowMode = false;  // 5번 모드 해제
+        randomSelectedRect = -1;
         
         // 색상 변화 모드 토글
         colorMode = !colorMode;
+        break;
+    case '5': // 랜덤 애니메이션 따라하기 모드
+        // 5번 모드는 1,2,3,4 중 하나가 켜져야만 작동
+        if (bounceMode || zigzagMode || morphMode || colorMode) {
+            followMode = false;
+            selectedRect = -1;
+            
+            randomFollowMode = !randomFollowMode;
+            
+            if (randomFollowMode && rectCount > 1) {
+                // 랜덤하게 사각형 선택
+                std::uniform_int_distribution<int> rectDis(0, rectCount - 1);
+                randomSelectedRect = rectDis(gen);
+            } else {
+                randomSelectedRect = -1;
+            }
+        }
         break;
 
     default:
@@ -612,6 +762,9 @@ void Mouse(int button, int state, int x, int y)
                 if (ptinrect(x, y, showingrect[i])) {
                     selectedRect = i;
                     followMode = true;
+                    // 랜덤 모드 해제
+                    randomFollowMode = false;
+                    randomSelectedRect = -1;
                     targetX = x;
                     targetY = y;
                     glutPostRedisplay();
