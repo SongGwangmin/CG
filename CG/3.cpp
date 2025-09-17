@@ -69,6 +69,10 @@ const GLdouble ZIGZAG_Y_CHANGE = 20.0;  // Y 좌표 변경량
 bool morphMode = false;     // 형태 변화 모드 여부
 std::uniform_real_distribution<GLdouble> morphDis(-5.0, 5.0); // -5에서 5 사이 난수
 
+// 색상 변화 모드용 변수
+bool colorMode = false;     // 색상 변화 모드 여부
+std::uniform_real_distribution<GLdouble> colorDis(0.0, 1.0); // 0.0에서 1.0 사이 난수
+
 
 ret morph(ret& after, ret& before) {
     int halfwidth = width / 2;
@@ -373,6 +377,18 @@ void UpdateMorphAnimation() {
     }
 }
 
+// 색상 변화 애니메이션 업데이트 함수
+void UpdateColorAnimation() {
+    if (!colorMode) return;
+    
+    for (int i = 0; i < rectCount; ++i) {
+        // 각 사각형의 색상을 지속적으로 변경
+        showingrect[i].Rvalue = colorDis(gen);
+        showingrect[i].Gvalue = colorDis(gen);
+        showingrect[i].Bvalue = colorDis(gen);
+    }
+}
+
 // 타이머 콜백 (glutTimerFunc 등에서 호출될 함수 예시)
 void TimerFunc(int value) {
     if (timerRunning) {
@@ -400,6 +416,11 @@ void TimerFunc(int value) {
     // 형태 변화 애니메이션 업데이트
     if (morphMode) {
         UpdateMorphAnimation();
+    }
+    
+    // 색상 변화 애니메이션 업데이트
+    if (colorMode) {
+        UpdateColorAnimation();
     }
     
     glutPostRedisplay();
@@ -497,11 +518,12 @@ void Keyboard(unsigned char key, int x, int y) {
         glutLeaveMainLoop();
         break;
     case '1': // 대각선 이동 및 튕기기 모드
-        // 다른 모드 해제 (2번, 3번 모드 포함)
+        // 다른 모드 해제 (2번, 3번, 4번 모드 포함)
         followMode = false;
         selectedRect = -1;
         zigzagMode = false; // 2번 모드 해제
         morphMode = false;  // 3번 모드 해제
+        colorMode = false;  // 4번 모드 해제
         
         // 튕기기 모드 토글
         bounceMode = !bounceMode;
@@ -524,11 +546,12 @@ void Keyboard(unsigned char key, int x, int y) {
         }
         break;
     case '2': // 지그재그 이동 모드
-        // 다른 모드 해제 (1번 모드 포함)
+        // 다른 모드 해제 (1번, 3번, 4번 모드 포함)
         followMode = false;
         selectedRect = -1;
         bounceMode = false; // 1번 모드 해제
         morphMode = false;  // 3번 모드 해제
+        colorMode = false;  // 4번 모드 해제
         
         // 지그재그 모드 토글
         zigzagMode = !zigzagMode;
@@ -549,14 +572,26 @@ void Keyboard(unsigned char key, int x, int y) {
         }
         break;
     case '3': // 형태 변화 모드
-        // 다른 모드 해제
+        // 다른 모드 해제 (1번, 2번, 4번 모드 포함)
         followMode = false;
         selectedRect = -1;
         bounceMode = false;  // 1번 모드 해제
         zigzagMode = false;  // 2번 모드 해제
+        colorMode = false;   // 4번 모드 해제
         
         // 형태 변화 모드 토글
         morphMode = !morphMode;
+        break;
+    case '4': // 색상 변화 모드
+        // 다른 모드 해제 (1번, 2번, 3번 모드 포함)
+        followMode = false;
+        selectedRect = -1;
+        bounceMode = false;  // 1번 모드 해제
+        zigzagMode = false;  // 2번 모드 해제
+        morphMode = false;   // 3번 모드 해제
+        
+        // 색상 변화 모드 토글
+        colorMode = !colorMode;
         break;
 
     default:
@@ -623,6 +658,11 @@ void Mouse(int button, int state, int x, int y)
                 else if (morphMode) {
                     // 형태 변화 모드는 특별한 초기화가 필요하지 않음
                     // UpdateMorphAnimation에서 자동으로 처리됨
+                }
+                // 색상 변화 모드가 켜져있으면 새 사각형도 색상 변화 적용 (특별한 초기화 필요 없음)
+                else if (colorMode) {
+                    // 색상 변화 모드는 특별한 초기화가 필요하지 않음
+                    // UpdateColorAnimation에서 자동으로 처리됨
                 } 
                 else {
                     // 모든 모드가 꺼져있으면 속도를 0으로 설정
