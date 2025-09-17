@@ -61,9 +61,9 @@ const GLdouble BOUNCE_SPEED = 3.0; // 이동 속도
 // 지그재그 이동 모드용 변수
 bool zigzagMode = false;    // 지그재그 모드 여부
 GLdouble zigzagSpeedX[5];   // 지그재그 X 방향 기본 속도
-GLdouble zigzagYOffset[5];  // Y 방향 오프셋 (벽에 닿을 때마다 변경)
-const GLdouble ZIGZAG_BASE_SPEED = 2.0; // 기본 이동 속도
-const GLdouble ZIGZAG_Y_CHANGE = 20.0;  // Y 좌표 변경량
+GLdouble zigzagSpeedY[5];   // 지그재그 Y 방향 기본 속도 (아래/위로 이동)
+const GLdouble ZIGZAG_BASE_SPEED = 5.0; // 기본 이동 속도 (X축)
+const GLdouble ZIGZAG_Y_SPEED = 10.0;   // Y 방향 기본 속도 (고정값 10.0!)
 
 // 형태 변화 모드용 변수
 bool morphMode = false;     // 형태 변화 모드 여부
@@ -151,16 +151,13 @@ void UpdateRandomFollowAnimation() {
         }
     }
     else if (zigzagMode) {
-        // 2번 모드: 지그재그 (타겟 사각형만, 속도 3배 증가)
-        showingrect[randomSelectedRect].x1 += zigzagSpeedX[randomSelectedRect] * 10.0;
-        showingrect[randomSelectedRect].x2 += zigzagSpeedX[randomSelectedRect] * 10.0;
+        // 2번 모드: 지그재그 (타겟 사각형만, 5번 모드 계수 제거)
+        showingrect[randomSelectedRect].x1 += zigzagSpeedX[randomSelectedRect];
+        showingrect[randomSelectedRect].x2 += zigzagSpeedX[randomSelectedRect];
         
         if (showingrect[randomSelectedRect].x1 <= 0 || showingrect[randomSelectedRect].x2 >= 500) {
             zigzagSpeedX[randomSelectedRect] = -zigzagSpeedX[randomSelectedRect];
-            std::uniform_real_distribution<GLdouble> yChangeDis(-ZIGZAG_Y_CHANGE, ZIGZAG_Y_CHANGE);
-            GLdouble yChange = yChangeDis(gen);
-            showingrect[randomSelectedRect].y1 += yChange;
-            showingrect[randomSelectedRect].y2 += yChange;
+            // 5번 모드에서는 Y 좌표 변경 없음 - 기본 지그재그 동작 유지
         }
     }
     else if (morphMode) {
@@ -373,63 +370,48 @@ void UpdateBounceAnimation() {
     }
 }
 
-// 지그재그 애니메이션 업데이트 함수 (직선 형태)
+// 지그재그 애니메이션 업데이트 함수 (수정된 버전)
 void UpdateZigzagAnimation() {
     if (!zigzagMode || randomFollowMode) return;  // 랜덤 모드일 때는 실행하지 않음
     
     for (int i = 0; i < rectCount; ++i) {
-        // X 방향으로만 이동 (직선)
+        // X 방향으로만 이동 (지그재그의 핵심)
         showingrect[i].x1 += zigzagSpeedX[i];
         showingrect[i].x2 += zigzagSpeedX[i];
         
-        // 경계 충돌 검사 및 처리 (500x500 윈도우) - 올바른 크기 유지 방식
-        // X 방향 경계 충돌 - 방향 반전 + Y 좌표 변경
         GLdouble rectWidth = showingrect[i].x2 - showingrect[i].x1;
         GLdouble rectHeight = showingrect[i].y2 - showingrect[i].y1;
         
+        // X 방향 경계 충돌 - 방향 반전 + Y 좌표 아래로 이동
         if (showingrect[i].x1 <= 0) {
             showingrect[i].x2 = rectWidth;
             showingrect[i].x1 = 0;
             zigzagSpeedX[i] = -zigzagSpeedX[i]; // X 방향 반전
             
-            // Y 좌표 랜덤하게 변경 (지그재그 효과)
-            std::uniform_real_distribution<GLdouble> yChangeDis(-ZIGZAG_Y_CHANGE, ZIGZAG_Y_CHANGE);
-            GLdouble yChange = yChangeDis(gen);
-            
-            showingrect[i].y1 += yChange;
-            showingrect[i].y2 += yChange;
-            
-            // Y 경계 체크 후 조정
-            if (showingrect[i].y1 < 0) {
-                showingrect[i].y2 = rectHeight;
-                showingrect[i].y1 = 0;
-            }
-            else if (showingrect[i].y2 > 500) {
-                showingrect[i].y1 = 500 - rectHeight;
-                showingrect[i].y2 = 500;
-            }
+            // Y 좌표를 아래로 이동 (지그재그 효과)
+            showingrect[i].y1 += zigzagSpeedY[i];
+            showingrect[i].y2 += zigzagSpeedY[i];
         }
         else if (showingrect[i].x2 >= 500) {
             showingrect[i].x1 = 500 - rectWidth;
             showingrect[i].x2 = 500;
             zigzagSpeedX[i] = -zigzagSpeedX[i]; // X 방향 반전
             
-            // Y 좌표 랜덤하게 변경 (지그재그 효과)
-            std::uniform_real_distribution<GLdouble> yChangeDis(-ZIGZAG_Y_CHANGE, ZIGZAG_Y_CHANGE);
-            GLdouble yChange = yChangeDis(gen);
-            
-            showingrect[i].y1 += yChange;
-            showingrect[i].y2 += yChange;
-            
-            // Y 경계 체크 후 조정
-            if (showingrect[i].y1 < 0) {
-                showingrect[i].y2 = rectHeight;
-                showingrect[i].y1 = 0;
-            }
-            else if (showingrect[i].y2 > 500) {
-                showingrect[i].y1 = 500 - rectHeight;
-                showingrect[i].y2 = 500;
-            }
+            // Y 좌표를 아래로 이동 (지그재그 효과)
+            showingrect[i].y1 += zigzagSpeedY[i];
+            showingrect[i].y2 += zigzagSpeedY[i];
+        }
+        
+        // Y 방향 경계 충돌 - Y 방향 반전 (위/아래 벽에 닿으면 방향 전환)
+        if (showingrect[i].y1 <= 0) {
+            showingrect[i].y2 = rectHeight;
+            showingrect[i].y1 = 0;
+            zigzagSpeedY[i] = abs(zigzagSpeedY[i]); // 아래쪽으로 이동하도록 양수로 변경
+        }
+        else if (showingrect[i].y2 >= 500) {
+            showingrect[i].y1 = 500 - rectHeight;
+            showingrect[i].y2 = 500;
+            zigzagSpeedY[i] = -abs(zigzagSpeedY[i]); // 위쪽으로 이동하도록 음수로 변경
         }
     }
 }
@@ -594,7 +576,7 @@ void main(int argc, char** argv)
         velocityX[i] = 0.0; // 속도 초기화
         velocityY[i] = 0.0;
         zigzagSpeedX[i] = 0.0; // 지그재그 변수 초기화
-        zigzagYOffset[i] = 0.0;
+        zigzagSpeedY[i] = 0.0; // 지그재그 Y 속도 초기화
     }
 
     glutDisplayFunc(drawScene);
@@ -691,7 +673,7 @@ void Keyboard(unsigned char key, int x, int y) {
             
             for (int i = 0; i < rectCount; ++i) {
                 zigzagSpeedX[i] = speedDis(gen);
-                zigzagYOffset[i] = 0.0; // Y 오프셋 초기화
+                zigzagSpeedY[i] = ZIGZAG_Y_SPEED; // Y 속도는 고정값 10.0
                 
                 // X 방향 최소 속도 보장
                 if (abs(zigzagSpeedX[i]) < 0.5) {
@@ -801,8 +783,8 @@ void Mouse(int button, int state, int x, int y)
                     std::uniform_real_distribution<GLdouble> speedDis(-ZIGZAG_BASE_SPEED, ZIGZAG_BASE_SPEED);
                     
                     zigzagSpeedX[rectCount] = speedDis(gen);
-                    zigzagYOffset[rectCount] = 0.0; // Y 오프셋 초기화
-                    
+                    zigzagSpeedY[rectCount] = ZIGZAG_Y_SPEED; // Y 속도는 고정값 10.0
+                
                     if (abs(zigzagSpeedX[rectCount]) < 0.5) {
                         zigzagSpeedX[rectCount] = (zigzagSpeedX[rectCount] >= 0) ? 0.5 : -0.5;
                     }
@@ -822,7 +804,7 @@ void Mouse(int button, int state, int x, int y)
                     velocityX[rectCount] = 0.0;
                     velocityY[rectCount] = 0.0;
                     zigzagSpeedX[rectCount] = 0.0;
-                    zigzagYOffset[rectCount] = 0.0;
+                    zigzagSpeedY[rectCount] = 0.0;
                 }
                 
                 rectCount++;
