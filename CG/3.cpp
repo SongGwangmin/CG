@@ -33,9 +33,9 @@ void Keyboard(unsigned char key, int x, int y);
 
 bool timerRunning = false;
 
-GLdouble Rvalue = 0.0;
-GLdouble Gvalue = 0.0;
-GLdouble Bvalue = 1.0;
+GLdouble Rvalue = 0.2;
+GLdouble Gvalue = 0.2;
+GLdouble Bvalue = 0.2;
 
 int width;
 int height;
