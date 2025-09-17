@@ -65,6 +65,11 @@ GLdouble zigzagYOffset[5];  // Y 방향 오프셋 (벽에 닿을 때마다 변경)
 const GLdouble ZIGZAG_BASE_SPEED = 2.0; // 기본 이동 속도
 const GLdouble ZIGZAG_Y_CHANGE = 20.0;  // Y 좌표 변경량
 
+// 형태 변화 모드용 변수
+bool morphMode = false;     // 형태 변화 모드 여부
+std::uniform_real_distribution<GLdouble> morphDis(-5.0, 5.0); // -5에서 5 사이 난수
+
+
 ret morph(ret& after, ret& before) {
     int halfwidth = width / 2;
     int halfheight = height / 2;
@@ -240,8 +245,12 @@ void UpdateZigzagAnimation() {
         // 경계 충돌 검사 및 처리 (500x500 윈도우)
         // X 방향 경계 충돌 - 방향 반전 + Y 좌표 변경
         if (showingrect[i].x1 <= 0) {
+            // 현재 사각형의 실제 폭과 높이 계산
+            GLdouble rectWidth = showingrect[i].x2 - showingrect[i].x1;
+            GLdouble rectHeight = showingrect[i].y2 - showingrect[i].y1;
+            
             showingrect[i].x1 = 0;
-            showingrect[i].x2 = rectspace;
+            showingrect[i].x2 = rectWidth; // 실제 폭 유지
             zigzagSpeedX[i] = -zigzagSpeedX[i]; // X 방향 반전
             
             // Y 좌표 랜덤하게 변경 (지그재그 효과)
@@ -255,17 +264,21 @@ void UpdateZigzagAnimation() {
             if (showingrect[i].y1 < 0) {
                 GLdouble overflow = -showingrect[i].y1;
                 showingrect[i].y1 = 0;
-                showingrect[i].y2 = rectspace;
+                showingrect[i].y2 = rectHeight; // 실제 높이 유지
             }
             else if (showingrect[i].y2 > 500) {
                 GLdouble overflow = showingrect[i].y2 - 500;
                 showingrect[i].y2 = 500;
-                showingrect[i].y1 = 500 - rectspace;
+                showingrect[i].y1 = 500 - rectHeight; // 실제 높이 유지
             }
         }
         else if (showingrect[i].x2 >= 500) {
+            // 현재 사각형의 실제 폭과 높이 계산
+            GLdouble rectWidth = showingrect[i].x2 - showingrect[i].x1;
+            GLdouble rectHeight = showingrect[i].y2 - showingrect[i].y1;
+            
             showingrect[i].x2 = 500;
-            showingrect[i].x1 = 500 - rectspace;
+            showingrect[i].x1 = 500 - rectWidth; // 실제 폭 유지
             zigzagSpeedX[i] = -zigzagSpeedX[i]; // X 방향 반전
             
             // Y 좌표 랜덤하게 변경 (지그재그 효과)
@@ -279,13 +292,83 @@ void UpdateZigzagAnimation() {
             if (showingrect[i].y1 < 0) {
                 GLdouble overflow = -showingrect[i].y1;
                 showingrect[i].y1 = 0;
-                showingrect[i].y2 = rectspace;
+                showingrect[i].y2 = rectHeight; // 실제 높이 유지
             }
             else if (showingrect[i].y2 > 500) {
                 GLdouble overflow = showingrect[i].y2 - 500;
                 showingrect[i].y2 = 500;
-                showingrect[i].y1 = 500 - rectspace;
+                showingrect[i].y1 = 500 - rectHeight; // 실제 높이 유지
             }
+        }
+    }
+}
+
+// 형태 변화 애니메이션 업데이트 함수
+void UpdateMorphAnimation() {
+    if (!morphMode) return;
+    
+    for (int i = 0; i < rectCount; ++i) {
+        // 원래 좌표 저장
+        GLdouble originalX1 = showingrect[i].x1;
+        GLdouble originalY1 = showingrect[i].y1;
+        GLdouble originalX2 = showingrect[i].x2;
+        GLdouble originalY2 = showingrect[i].y2;
+        
+        // -5에서 5 사이의 난수로 각 좌표 변경
+        showingrect[i].x1 += morphDis(gen);
+        showingrect[i].y1 += morphDis(gen);
+        showingrect[i].x2 += morphDis(gen);
+        showingrect[i].y2 += morphDis(gen);
+        
+        // 좌표 정규화: 더 작은 값이 x1, y1에 오도록
+        if (showingrect[i].x1 > showingrect[i].x2) {
+            std::swap(showingrect[i].x1, showingrect[i].x2);
+        }
+        if (showingrect[i].y1 > showingrect[i].y2) {
+            std::swap(showingrect[i].y1, showingrect[i].y2);
+        }
+        
+        // 윈도우 경계 체크 및 조정 (500x500)
+        // X 좌표 경계 체크
+        if (showingrect[i].x1 < 0) {
+            GLdouble offset = -showingrect[i].x1;
+            showingrect[i].x1 = 0;
+            showingrect[i].x2 += offset;
+        }
+        if (showingrect[i].x2 > 500) {
+            GLdouble offset = showingrect[i].x2 - 500;
+            showingrect[i].x2 = 500;
+            showingrect[i].x1 -= offset;
+            if (showingrect[i].x1 < 0) {
+                showingrect[i].x1 = 0;
+            }
+        }
+        
+        // Y 좌표 경계 체크
+        if (showingrect[i].y1 < 0) {
+            GLdouble offset = -showingrect[i].y1;
+            showingrect[i].y1 = 0;
+            showingrect[i].y2 += offset;
+        }
+        if (showingrect[i].y2 > 500) {
+            GLdouble offset = showingrect[i].y2 - 500;
+            showingrect[i].y2 = 500;
+            showingrect[i].y1 -= offset;
+            if (showingrect[i].y1 < 0) {
+                showingrect[i].y1 = 0;
+            }
+        }
+        
+        // 최소 크기 보장 (너무 작아지지 않도록)
+        if (showingrect[i].x2 - showingrect[i].x1 < 5) {
+            GLdouble centerX = (showingrect[i].x1 + showingrect[i].x2) / 2;
+            showingrect[i].x1 = centerX - 2.5;
+            showingrect[i].x2 = centerX + 2.5;
+        }
+        if (showingrect[i].y2 - showingrect[i].y1 < 5) {
+            GLdouble centerY = (showingrect[i].y1 + showingrect[i].y2) / 2;
+            showingrect[i].y1 = centerY - 2.5;
+            showingrect[i].y2 = centerY + 2.5;
         }
     }
 }
@@ -312,6 +395,11 @@ void TimerFunc(int value) {
     // 지그재그 애니메이션 업데이트
     if (zigzagMode) {
         UpdateZigzagAnimation();
+    }
+    
+    // 형태 변화 애니메이션 업데이트
+    if (morphMode) {
+        UpdateMorphAnimation();
     }
     
     glutPostRedisplay();
@@ -409,10 +497,11 @@ void Keyboard(unsigned char key, int x, int y) {
         glutLeaveMainLoop();
         break;
     case '1': // 대각선 이동 및 튕기기 모드
-        // 다른 모드 해제 (2번 모드 포함)
+        // 다른 모드 해제 (2번, 3번 모드 포함)
         followMode = false;
         selectedRect = -1;
         zigzagMode = false; // 2번 모드 해제
+        morphMode = false;  // 3번 모드 해제
         
         // 튕기기 모드 토글
         bounceMode = !bounceMode;
@@ -439,6 +528,7 @@ void Keyboard(unsigned char key, int x, int y) {
         followMode = false;
         selectedRect = -1;
         bounceMode = false; // 1번 모드 해제
+        morphMode = false;  // 3번 모드 해제
         
         // 지그재그 모드 토글
         zigzagMode = !zigzagMode;
@@ -458,11 +548,16 @@ void Keyboard(unsigned char key, int x, int y) {
             }
         }
         break;
-    case 'a':
-    {
-       
-    }
-    break;
+    case '3': // 형태 변화 모드
+        // 다른 모드 해제
+        followMode = false;
+        selectedRect = -1;
+        bounceMode = false;  // 1번 모드 해제
+        zigzagMode = false;  // 2번 모드 해제
+        
+        // 형태 변화 모드 토글
+        morphMode = !morphMode;
+        break;
 
     default:
         break;
@@ -523,7 +618,13 @@ void Mouse(int button, int state, int x, int y)
                     if (abs(zigzagSpeedX[rectCount]) < 0.5) {
                         zigzagSpeedX[rectCount] = (zigzagSpeedX[rectCount] >= 0) ? 0.5 : -0.5;
                     }
-                } else {
+                }
+                // 형태 변화 모드가 켜져있으면 새 사각형도 형태 변화 적용 (특별한 초기화 필요 없음)
+                else if (morphMode) {
+                    // 형태 변화 모드는 특별한 초기화가 필요하지 않음
+                    // UpdateMorphAnimation에서 자동으로 처리됨
+                } 
+                else {
                     // 모든 모드가 꺼져있으면 속도를 0으로 설정
                     velocityX[rectCount] = 0.0;
                     velocityY[rectCount] = 0.0;
