@@ -95,6 +95,7 @@ bool ptinrect(int x, int y, ret& rect) {
 
 void Mouse(int button, int state, int x, int y);
 
+int startcount = 0;
 
 // 타이머 콜백 (glutTimerFunc 등에서 호출될 함수 예시)
 void TimerFunc(int value) {
@@ -130,6 +131,21 @@ void main(int argc, char** argv)
         std::cout << "GLEW Initialized\n";
     width = glutGet(GLUT_WINDOW_WIDTH);
     height = glutGet(GLUT_WINDOW_HEIGHT);
+
+    int i = 0;
+    while (i < 10) {
+        ret* newrect = new ret;
+        newrect->x1 = rects[i].x1;
+        newrect->y1 = rects[i].y1;
+        newrect->x2 = rects[i].x2;
+        newrect->y2 = rects[i].y2;
+        newrect->Rvalue = rects[i].Rvalue;
+        newrect->Gvalue = rects[i].Gvalue;
+        newrect->Bvalue = rects[i].Bvalue;
+        rectlist.push_back(*newrect);
+        rectcount++;
+        i++;
+    }
 
     glutDisplayFunc(drawScene);
     glutReshapeFunc(Reshape);
@@ -176,20 +192,7 @@ void Keyboard(unsigned char key, int x, int y) {
         break;
     case 'a':
     {
-        int i = 0;
-        while (i < 10) {
-            ret* newrect = new ret;
-            newrect->x1 = rects[i].x1;
-            newrect->y1 = rects[i].y1;
-            newrect->x2 = rects[i].x2;
-            newrect->y2 = rects[i].y2;
-            newrect->Rvalue = rects[i].Rvalue;
-            newrect->Gvalue = rects[i].Gvalue;
-            newrect->Bvalue = rects[i].Bvalue;
-            rectlist.push_back(*newrect);
-            rectcount++;
-            i++;
-        }
+        
     }
     break;
 
