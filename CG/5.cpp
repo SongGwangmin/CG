@@ -45,6 +45,7 @@ GLvoid Reshape(int w, int h);
 void Keyboard(unsigned char key, int x, int y);
 void Split8Rectangle(int groupIndex);
 void UpdateAnimation();
+void InitializePieces(int groupIndex);
 
 bool timerRunning = false;
 
@@ -78,47 +79,49 @@ bool ptinrect(int x, int y, ret& rect) {
 void Mouse(int button, int state, int x, int y)
 {
     if (state == GLUT_DOWN) {
-        // 클릭된 사각형 그룹 찾기 (분할되지 않은 원본만)
+        // 클릭된 작은 조각 찾기
         for (int i = 0; i < 10; i++) {
             rect_group& group = rectGroups[i];
             
-            if (!group.isActive || group.isSplit) continue;
+            if (!group.isActive) continue;
             
-            if (ptinrect(x, y, group.mainRect)) {
-                // 콘솔에 클릭된 사각형 정보 출력
-                std::cout << "=== Rectangle Clicked ===" << std::endl;
-                std::cout << "Index: " << i << std::endl;
-                std::cout << "Split Type: " << group.splitType;
+            // 8개 조각 중 하나라도 클릭되면 전체 그룹의 조각들이 이동 시작
+            for (int j = 0; j < 8; j++) {
+                if (!group.pieces[j].isActive) continue;
                 
-                switch(group.splitType) {
-                    case 1: std::cout << " (8-Split: 4 corner + 4 middle)"; break;
-                    case 2: std::cout << " (4-Split: Diagonal)"; break; 
-                    case 3: std::cout << " (8-Split: All directions)"; break;
-                    case 4: std::cout << " (4-Split: One direction)"; break;
+                if (ptinrect(x, y, group.pieces[j])) {
+                    // 콘솔에 클릭된 조각 정보 출력
+                    std::cout << "=== Small Piece Clicked ===" << std::endl;
+                    std::cout << "Group Index: " << i << ", Piece: " << j << std::endl;
+                    std::cout << "Split Type: " << group.splitType;
+                    
+                    switch(group.splitType) {
+                        case 1: std::cout << " (All move, show 0~3)"; break;
+                        case 2: std::cout << " (All move, show 4~7)"; break; 
+                        case 3: std::cout << " (All move, show all)"; break;
+                        case 4: std::cout << " (All move same direction, show 0~3)"; break;
+                    }
+                    std::cout << std::endl;
+                    
+                    if (group.splitType == 4) {
+                        std::cout << "Move Direction: " << group.moveDirection;
+                        const char* dirNames[] = {"Up", "Up-Right", "Right", "Down-Right", 
+                                                "Down", "Down-Left", "Left", "Up-Left"};
+                        std::cout << " (" << dirNames[group.moveDirection] << ")" << std::endl;
+                    }
+                    
+                    std::cout << "=============================" << std::endl;
+                    
+                    // 이동 시작
+                    Split8Rectangle(i);
+                    glutPostRedisplay();
+                    return;
                 }
-                std::cout << std::endl;
-                
-                if (group.splitType == 4) {
-                    std::cout << "Move Direction: " << group.moveDirection;
-                    const char* dirNames[] = {"Up", "Up-Right", "Right", "Down-Right", 
-                                            "Down", "Down-Left", "Left", "Up-Left"};
-                    std::cout << " (" << dirNames[group.moveDirection] << ")" << std::endl;
-                }
-                
-                std::cout << "Position: (" << group.mainRect.x1 << "," << group.mainRect.y1 
-                         << ") to (" << group.mainRect.x2 << "," << group.mainRect.y2 << ")" << std::endl;
-                std::cout << "Color: RGB(" << group.mainRect.Rvalue << "," 
-                         << group.mainRect.Gvalue << "," << group.mainRect.Bvalue << ")" << std::endl;
-                std::cout << "=========================" << std::endl;
-                
-                Split8Rectangle(i);
-                glutPostRedisplay();
-                return;
             }
         }
         
-        // 클릭했지만 사각형이 없는 경우
-        std::cout << "No rectangle clicked at (" << x << "," << y << ")" << std::endl;
+        // 클릭했지만 조각이 없는 경우
+        std::cout << "No piece clicked at (" << x << "," << y << ")" << std::endl;
     }
 }
 
@@ -159,7 +162,7 @@ void main(int argc, char** argv)
     for (int i = 0; i < 10; ++i) {
         rect_group& group = rectGroups[i];
         
-        // 메인 사각형 설정
+        // 메인 사각형 설정 (기준용)
         group.mainRect.x1 = numdis(gen);
         group.mainRect.y1 = numdis(gen);
         group.mainRect.x2 = group.mainRect.x1 + rectspace;
@@ -170,17 +173,12 @@ void main(int argc, char** argv)
         group.mainRect.isActive = true;
         
         // 그룹 초기 상태
-        group.isSplit = false;
         group.isActive = true;
-        
-        // 랜덤 분할 타입과 이동 방향 설정
         group.splitType = splitDis(gen);        // 1~4 중 랜덤
         group.moveDirection = directionDis(gen); // 0~7 중 랜덤
         
-        // 8개 조각들 비활성화 상태로 초기화
-        for (int j = 0; j < 8; j++) {
-            group.pieces[j].isActive = false;
-        }
+        // 8개 조각들을 원본 위치에 8분할 규칙으로 배치
+        InitializePieces(i);
     }
     
     glutDisplayFunc(drawScene);
@@ -199,28 +197,20 @@ GLvoid drawScene()
     glClearColor(Rvalue, Gvalue, Bvalue, 0.1f);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    // 모든 사각형 그룹 그리기
+    // 모든 사각형 그룹의 8개 조각들 그리기 (원본 사각형은 그리지 않음)
     for (int i = 0; i < 10; i++) {
         rect_group& group = rectGroups[i];
         
         if (!group.isActive) continue;
         
-        if (!group.isSplit) {
-            // 분할되지 않은 경우: 원본 사각형 그리기
+        // 항상 8개의 작은 조각들만 그리기
+        for (int j = 0; j < 8; j++) {
+            if (!group.pieces[j].isActive) continue;
+            
             ret drawsupport;
-            drawsupport = morph(drawsupport, group.mainRect);
+            drawsupport = morph(drawsupport, group.pieces[j]);
             glColor3f(drawsupport.Rvalue, drawsupport.Gvalue, drawsupport.Bvalue);
             glRectf(drawsupport.x1, drawsupport.y1, drawsupport.x2, drawsupport.y2);
-        } else {
-            // 분할된 경우: 8개의 조각들 그리기
-            for (int j = 0; j < 8; j++) {
-                if (!group.pieces[j].isActive) continue;
-                
-                ret drawsupport;
-                drawsupport = morph(drawsupport, group.pieces[j]);
-                glColor3f(drawsupport.Rvalue, drawsupport.Gvalue, drawsupport.Bvalue);
-                glRectf(drawsupport.x1, drawsupport.y1, drawsupport.x2, drawsupport.y2);
-            }
         }
     }
     
@@ -284,7 +274,7 @@ void Keyboard(unsigned char key, int x, int y) {
         for (int i = 0; i < 10; ++i) {
             rect_group& group = rectGroups[i];
             
-            // 메인 사각형 재설정
+            // 메인 사각형 재설정 (기준용)
             group.mainRect.x1 = numdis(gen);
             group.mainRect.y1 = numdis(gen);
             group.mainRect.x2 = group.mainRect.x1 + rectspace;
@@ -295,17 +285,12 @@ void Keyboard(unsigned char key, int x, int y) {
             group.mainRect.isActive = true;
             
             // 그룹 상태 리셋
-            group.isSplit = false;
             group.isActive = true;
-            
-            // 새로운 랜덤 분할 타입과 이동 방향 설정
             group.splitType = splitDis(gen);
             group.moveDirection = directionDis(gen);
             
-            // 8개 조각들 비활성화
-            for (int j = 0; j < 8; j++) {
-                group.pieces[j].isActive = false;
-            }
+            // 8개 조각들을 새 위치에 8분할 규칙으로 재배치
+            InitializePieces(i);
         }
         break;
 
@@ -323,13 +308,105 @@ void Keyboard(unsigned char key, int x, int y) {
 // 8분할 함수 - splitType에 따라 다른 패턴으로 분할
 void Split8Rectangle(int groupIndex) {
     if (groupIndex < 0 || groupIndex >= 10) return;
-    if (!rectGroups[groupIndex].isActive || rectGroups[groupIndex].isSplit) return;
+    if (!rectGroups[groupIndex].isActive) return;
     
     rect_group& group = rectGroups[groupIndex];
     ret& original = group.mainRect;
     
-    // 분할 시작 정보 출력
-    std::cout << ">>> Starting split for Rectangle " << groupIndex << " <<<" << std::endl;
+    // 이동 시작 정보 출력
+    std::cout << ">>> Starting movement for Rectangle " << groupIndex << " <<<" << std::endl;
+    
+    // 각 조각이 자신의 위치에서 바깥쪽으로 이동하는 방향 벡터
+    const GLdouble directions[8][2] = {
+        {-1.4, -1.4}, // 0: 좌상 → 좌상대각선으로
+        {-1.4, 1.4},  // 1: 좌하 → 좌하대각선으로
+        {1.4, -1.4},  // 2: 우상 → 우상대각선으로  
+        {1.4, 1.4},   // 3: 우하 → 우하대각선으로
+        {-2, 0},      // 4: 좌측 중간 → 왼쪽으로
+        {0, -2},      // 5: 상단 중간 → 위로
+        {0, 2},       // 6: 하단 중간 → 아래로
+        {2, 0}        // 7: 우측 중간 → 오른쪽으로
+    };
+    
+    // 모든 조각의 색상을 동일하게 유지
+    for (int i = 0; i < 8; i++) {
+        group.pieces[i].Rvalue = original.Rvalue;
+        group.pieces[i].Gvalue = original.Gvalue;
+        group.pieces[i].Bvalue = original.Bvalue;
+        group.pieces[i].lifeTime = 0;
+    }
+    
+    switch (group.splitType) {
+        case 1: { // 상하좌우 - 모든 조각 이동하되, 0~3번만 출력
+            std::cout << "All pieces move, but only show 0~3 (corners)" << std::endl;
+            
+            // 모든 조각(0~7번)에 해당 위치에 맞는 이동 속도 부여
+            for (int i = 0; i < 8; i++) {
+                group.pieces[i].velocityX = directions[i][0];
+                group.pieces[i].velocityY = directions[i][1];
+            }
+            
+            // 4~7번 조각을 보이지 않게 (이동은 하되 화면에 표시 안함)
+            for (int i = 4; i < 8; i++) {
+                group.pieces[i].isActive = false;
+            }
+            break;
+        }
+        case 2: { // 대각선 - 모든 조각 이동하되, 4~7번만 출력
+            std::cout << "All pieces move, but only show 4~7 (middles)" << std::endl;
+            
+            // 모든 조각(0~7번)에 해당 위치에 맞는 이동 속도 부여
+            for (int i = 0; i < 8; i++) {
+                group.pieces[i].velocityX = directions[i][0];
+                group.pieces[i].velocityY = directions[i][1];
+            }
+            
+            // 0~3번 조각을 보이지 않게 (이동은 하되 화면에 표시 안함)
+            for (int i = 0; i < 4; i++) {
+                group.pieces[i].isActive = false;
+            }
+            break;
+        }
+        case 3: { // 팔방으로 - 모든 8개 사각형 이동하고 출력
+            std::cout << "All 8 pieces move and show" << std::endl;
+            
+            // 모든 조각이 해당 위치에서 바깥쪽으로 이동
+            for (int i = 0; i < 8; i++) {
+                group.pieces[i].velocityX = directions[i][0];
+                group.pieces[i].velocityY = directions[i][1];
+            }
+            break;
+        }
+        case 4: { // 0~3번 사각형이 한방향으로 - 모든 조각 이동하되, 0~3번만 출력
+            const char* dirNames[] = {"Up-Left", "Down-Left", "Up-Right", "Down-Right", 
+                                    "Left", "Up", "Down", "Right"};
+            std::cout << "All pieces move in their respective directions, but only show 0~3" << std::endl;
+            
+            // Type 4에서는 모든 조각이 동일한 방향으로 이동
+            GLdouble moveX = directions[group.moveDirection % 8][0];
+            GLdouble moveY = directions[group.moveDirection % 8][1];
+            
+            // 모든 조각을 같은 방향으로 이동
+            for (int i = 0; i < 8; i++) {
+                group.pieces[i].velocityX = moveX;
+                group.pieces[i].velocityY = moveY;
+            }
+            
+            // 4~7번 조각을 보이지 않게 (이동은 하되 화면에 표시 안함)
+            for (int i = 4; i < 8; i++) {
+                group.pieces[i].isActive = false;
+            }
+            break;
+        }
+    }
+    
+    std::cout << "Movement started!" << std::endl << std::endl;
+}
+
+// 8개의 작은 조각들을 원본 사각형 위치에 배치하는 함수
+void InitializePieces(int groupIndex) {
+    rect_group& group = rectGroups[groupIndex];
+    ret& original = group.mainRect;
     
     GLdouble x1 = original.x1, y1 = original.y1;
     GLdouble x2 = original.x2, y2 = original.y2;
@@ -340,146 +417,74 @@ void Split8Rectangle(int groupIndex) {
     GLdouble quarterWidth = width / 4;
     GLdouble quarterHeight = height / 4;
     
-    // 그룹을 분할 상태로 설정
-    group.isSplit = true;
-    
-    // 팔방 이동 방향 벡터 [상, 우상, 우, 우하, 하, 좌하, 좌, 좌상]
-    const GLdouble directions[8][2] = {
-        {0, -2},    // 상
-        {1.4, -1.4}, // 우상  
-        {2, 0},     // 우
-        {1.4, 1.4}, // 우하
-        {0, 2},     // 하
-        {-1.4, 1.4}, // 좌하
-        {-2, 0},    // 좌
-        {-1.4, -1.4} // 좌상
-    };
-    
-    // 모든 조각은 원본 색상 유지
+    // 모든 조각은 원본과 동일한 색상으로 통일
     for (int i = 0; i < 8; i++) {
         group.pieces[i] = original;
         group.pieces[i].isActive = true;
         group.pieces[i].lifeTime = 0;
+        group.pieces[i].velocityX = 0.0;
+        group.pieces[i].velocityY = 0.0;
+        
+        // 모든 조각이 동일한 색상을 가지도록 설정
+        group.pieces[i].Rvalue = original.Rvalue;
+        group.pieces[i].Gvalue = original.Gvalue;
+        group.pieces[i].Bvalue = original.Bvalue;
     }
     
-    switch (group.splitType) {
-        case 1: { // 상하좌우 4분할 + 중간점 4개
-            std::cout << "Splitting into 8 pieces: 4 corners + 4 middle pieces" << std::endl;
-            
-            // 좌상, 좌하, 우상, 우하
-            group.pieces[0].x1 = x1; group.pieces[0].y1 = y1;
-            group.pieces[0].x2 = x1 + halfWidth; group.pieces[0].y2 = y1 + halfHeight;
-            group.pieces[0].velocityX = -1.5; group.pieces[0].velocityY = -1.5;
-            
-            group.pieces[1].x1 = x1; group.pieces[1].y1 = y1 + halfHeight;
-            group.pieces[1].x2 = x1 + halfWidth; group.pieces[1].y2 = y2;
-            group.pieces[1].velocityX = -1.5; group.pieces[1].velocityY = 1.5;
-            
-            group.pieces[2].x1 = x1 + halfWidth; group.pieces[2].y1 = y1;
-            group.pieces[2].x2 = x2; group.pieces[2].y2 = y1 + halfHeight;
-            group.pieces[2].velocityX = 1.5; group.pieces[2].velocityY = -1.5;
-            
-            group.pieces[3].x1 = x1 + halfWidth; group.pieces[3].y1 = y1 + halfHeight;
-            group.pieces[3].x2 = x2; group.pieces[3].y2 = y2;
-            group.pieces[3].velocityX = 1.5; group.pieces[3].velocityY = 1.5;
-            
-            // 중간점 4개
-            group.pieces[4].x1 = x1; group.pieces[4].y1 = y1 + quarterHeight;
-            group.pieces[4].x2 = x1 + halfWidth; group.pieces[4].y2 = y2 - quarterHeight;
-            group.pieces[4].velocityX = -2.0; group.pieces[4].velocityY = 0;
-            
-            group.pieces[5].x1 = x1 + quarterWidth; group.pieces[5].y1 = y1;
-            group.pieces[5].x2 = x2 - quarterWidth; group.pieces[5].y2 = y1 + halfHeight;
-            group.pieces[5].velocityX = 0; group.pieces[5].velocityY = -2.0;
-            
-            group.pieces[6].x1 = x1 + quarterWidth; group.pieces[6].y1 = y1 + halfHeight;
-            group.pieces[6].x2 = x2 - quarterWidth; group.pieces[6].y2 = y2;
-            group.pieces[6].velocityX = 0; group.pieces[6].velocityY = 2.0;
-            
-            group.pieces[7].x1 = x1 + halfWidth; group.pieces[7].y1 = y1 + quarterHeight;
-            group.pieces[7].x2 = x2; group.pieces[7].y2 = y2 - quarterHeight;
-            group.pieces[7].velocityX = 2.0; group.pieces[7].velocityY = 0;
-            break;
-        }
-        case 2: { // 대각선 4분할
-            std::cout << "Splitting into 4 diagonal pieces" << std::endl;
-            
-            // 4개만 활성화, 나머지는 비활성화
-            for (int i = 4; i < 8; i++) {
-                group.pieces[i].isActive = false;
-            }
-            
-            group.pieces[0].x1 = x1; group.pieces[0].y1 = y1;
-            group.pieces[0].x2 = x1 + halfWidth; group.pieces[0].y2 = y1 + halfHeight;
-            group.pieces[0].velocityX = -2.0; group.pieces[0].velocityY = -2.0;
-            
-            group.pieces[1].x1 = x1 + halfWidth; group.pieces[1].y1 = y1;
-            group.pieces[1].x2 = x2; group.pieces[1].y2 = y1 + halfHeight;
-            group.pieces[1].velocityX = 2.0; group.pieces[1].velocityY = -2.0;
-            
-            group.pieces[2].x1 = x1; group.pieces[2].y1 = y1 + halfHeight;
-            group.pieces[2].x2 = x1 + halfWidth; group.pieces[2].y2 = y2;
-            group.pieces[2].velocityX = -2.0; group.pieces[2].velocityY = 2.0;
-            
-            group.pieces[3].x1 = x1 + halfWidth; group.pieces[3].y1 = y1 + halfHeight;
-            group.pieces[3].x2 = x2; group.pieces[3].y2 = y2;
-            group.pieces[3].velocityX = 2.0; group.pieces[3].velocityY = 2.0;
-            break;
-        }
-        case 3: { // 팔방 8분할
-            std::cout << "Splitting into 8 pieces in all directions" << std::endl;
-            
-            GLdouble centerX = x1 + halfWidth;
-            GLdouble centerY = y1 + halfHeight;
-            GLdouble pieceWidth = width / 3;
-            GLdouble pieceHeight = height / 3;
-            
-            for (int i = 0; i < 8; i++) {
-                group.pieces[i].x1 = centerX - pieceWidth/2;
-                group.pieces[i].y1 = centerY - pieceHeight/2;
-                group.pieces[i].x2 = centerX + pieceWidth/2;
-                group.pieces[i].y2 = centerY + pieceHeight/2;
-                group.pieces[i].velocityX = directions[i][0];
-                group.pieces[i].velocityY = directions[i][1];
-            }
-            break;
-        }
-        case 4: { // 한방향으로 4개 분할
-            const char* dirNames[] = {"Up", "Up-Right", "Right", "Down-Right", 
-                                    "Down", "Down-Left", "Left", "Up-Left"};
-            std::cout << "Splitting into 4 pieces moving " << dirNames[group.moveDirection] << std::endl;
-            
-            // 4개만 활성화
-            for (int i = 4; i < 8; i++) {
-                group.pieces[i].isActive = false;
-            }
-            
-            GLdouble pieceWidth = width / 2;
-            GLdouble pieceHeight = height / 2;
-            GLdouble moveX = directions[group.moveDirection][0];
-            GLdouble moveY = directions[group.moveDirection][1];
-            
-            // 4등분하여 모두 같은 방향으로
-            group.pieces[0].x1 = x1; group.pieces[0].y1 = y1;
-            group.pieces[0].x2 = x1 + pieceWidth; group.pieces[0].y2 = y1 + pieceHeight;
-            group.pieces[0].velocityX = moveX; group.pieces[0].velocityY = moveY;
-            
-            group.pieces[1].x1 = x1 + pieceWidth; group.pieces[1].y1 = y1;
-            group.pieces[1].x2 = x2; group.pieces[1].y2 = y1 + pieceHeight;
-            group.pieces[1].velocityX = moveX; group.pieces[1].velocityY = moveY;
-            
-            group.pieces[2].x1 = x1; group.pieces[2].y1 = y1 + pieceHeight;
-            group.pieces[2].x2 = x1 + pieceWidth; group.pieces[2].y2 = y2;
-            group.pieces[2].velocityX = moveX; group.pieces[2].velocityY = moveY;
-            
-            group.pieces[3].x1 = x1 + pieceWidth; group.pieces[3].y1 = y1 + pieceHeight;
-            group.pieces[3].x2 = x2; group.pieces[3].y2 = y2;
-            group.pieces[3].velocityX = moveX; group.pieces[3].velocityY = moveY;
-            break;
-        }
-    }
+    // === 당신의 8분할 규칙에 따라 배치 ===
     
-    std::cout << "Split completed!" << std::endl << std::endl;
+    // 4개 기본 격자 (2x2 분할)
+    // 좌상 (0,0) ~ (10,10)
+    group.pieces[0].x1 = x1;
+    group.pieces[0].y1 = y1;
+    group.pieces[0].x2 = x1 + halfWidth;
+    group.pieces[0].y2 = y1 + halfHeight;
+    
+    // 좌하 (0,10) ~ (10,20)
+    group.pieces[1].x1 = x1;
+    group.pieces[1].y1 = y1 + halfHeight;
+    group.pieces[1].x2 = x1 + halfWidth;
+    group.pieces[1].y2 = y2;
+    
+    // 우상 (10,0) ~ (20,10)
+    group.pieces[2].x1 = x1 + halfWidth;
+    group.pieces[2].y1 = y1;
+    group.pieces[2].x2 = x2;
+    group.pieces[2].y2 = y1 + halfHeight;
+    
+    // 우하 (10,10) ~ (20,20)
+    group.pieces[3].x1 = x1 + halfWidth;
+    group.pieces[3].y1 = y1 + halfHeight;
+    group.pieces[3].x2 = x2;
+    group.pieces[3].y2 = y2;
+    
+    // === 4개 중간점 사각형 (겹치는 부분) ===
+    // (0,5) ~ (10,15) - 세로 중간 오프셋
+    group.pieces[4].x1 = x1;
+    group.pieces[4].y1 = y1 + quarterHeight;
+    group.pieces[4].x2 = x1 + halfWidth;
+    group.pieces[4].y2 = y2 - quarterHeight;
+    
+    // (5,0) ~ (15,10) - 가로 중간 오프셋
+    group.pieces[5].x1 = x1 + quarterWidth;
+    group.pieces[5].y1 = y1;
+    group.pieces[5].x2 = x2 - quarterWidth;
+    group.pieces[5].y2 = y1 + halfHeight;
+    
+    // (5,10) ~ (15,20) - 가로 중간, 세로 하단
+    group.pieces[6].x1 = x1 + quarterWidth;
+    group.pieces[6].y1 = y1 + halfHeight;
+    group.pieces[6].x2 = x2 - quarterWidth;
+    group.pieces[6].y2 = y2;
+    
+    // (10,5) ~ (20,15) - 우측, 세로 중간
+    group.pieces[7].x1 = x1 + halfWidth;
+    group.pieces[7].y1 = y1 + quarterHeight;
+    group.pieces[7].x2 = x2;
+    group.pieces[7].y2 = y2 - quarterHeight;
+    
+    // 그룹을 "항상 분할된 상태"로 설정
+    group.isSplit = true;
 }
 
 // 애니메이션 업데이트
@@ -487,7 +492,7 @@ void UpdateAnimation() {
     for (int i = 0; i < 10; i++) {
         rect_group& group = rectGroups[i];
         
-        if (!group.isActive || !group.isSplit) continue;
+        if (!group.isActive) continue;
         
         bool hasActivePiece = false;
         
@@ -497,58 +502,46 @@ void UpdateAnimation() {
             
             if (!piece.isActive) continue;
             
-            // 위치 업데이트
-            piece.x1 += piece.velocityX;
-            piece.y1 += piece.velocityY;
-            piece.x2 += piece.velocityX;
-            piece.y2 += piece.velocityY;
-            
-            // 크기 축소 (중심점 기준) - 매우 빠른 축소 속도
-            GLdouble centerX = (piece.x1 + piece.x2) / 2;
-            GLdouble centerY = (piece.y1 + piece.y2) / 2;
-            GLdouble currentWidth = piece.x2 - piece.x1;
-            GLdouble currentHeight = piece.y2 - piece.y1;
-            
-            GLdouble newWidth = currentWidth * 0.96;  // 4% 축소 (매우 빠른 축소)
-            GLdouble newHeight = currentHeight * 0.96;
-            
-            piece.x1 = centerX - newWidth / 2;
-            piece.x2 = centerX + newWidth / 2;
-            piece.y1 = centerY - newHeight / 2;
-            piece.y2 = centerY + newHeight / 2;
-            
-            piece.lifeTime++;
-            
-            // 삭제 조건: 크기가 10 이하 또는 300프레임(5초) 경과
-            if (abs(piece.x2 - piece.x1) <= 5 || abs(piece.y2 - piece.y1) <= 5 || piece.lifeTime > 300) {
-                piece.isActive = false;
+            // 이동 중인 조각들만 위치 업데이트 및 축소
+            if (abs(piece.velocityX) > 0.01 || abs(piece.velocityY) > 0.01) {
+                // 위치 업데이트
+                piece.x1 += piece.velocityX;
+                piece.y1 += piece.velocityY;
+                piece.x2 += piece.velocityX;
+                piece.y2 += piece.velocityY;
+                
+                // 크기 축소 (중심점 기준)
+                GLdouble centerX = (piece.x1 + piece.x2) / 2;
+                GLdouble centerY = (piece.y1 + piece.y2) / 2;
+                GLdouble currentWidth = piece.x2 - piece.x1;
+                GLdouble currentHeight = piece.y2 - piece.y1;
+                
+                GLdouble newWidth = currentWidth * 0.96;  // 4% 축소
+                GLdouble newHeight = currentHeight * 0.96;
+                
+                piece.x1 = centerX - newWidth / 2;
+                piece.x2 = centerX + newWidth / 2;
+                piece.y1 = centerY - newHeight / 2;
+                piece.y2 = centerY + newHeight / 2;
+                
+                piece.lifeTime++;
+                
+                // 삭제 조건: 크기가 5 이하 또는 300프레임(5초) 경과
+                if (abs(piece.x2 - piece.x1) <= 5 || abs(piece.y2 - piece.y1) <= 5 || piece.lifeTime > 300) {
+                    piece.isActive = false;
+                } else {
+                    hasActivePiece = true;
+                }
             } else {
+                // 이동하지 않는 조각들은 그대로 유지
                 hasActivePiece = true;
             }
         }
         
-        // 모든 조각이 비활성화되면 그룹 전체를 비활성화
+        // 모든 조각이 비활성화되면 그룹 자체를 비활성화 (r키로만 재생성)
         if (!hasActivePiece) {
+            std::cout << "All pieces in group " << i << " disappeared" << std::endl;
             group.isActive = false;
         }
     }
-    
-    // 비활성 사각형 제거
-    for (auto& group : rectGroups) {
-        if (!group.isActive) continue;
-        
-        // 원본 사각형만 체크
-        if (!group.isSplit && !group.mainRect.isActive) {
-            group.isActive = false;
-        }
-    }
-    
-    // 최종적으로 비활성화된 그룹은 제거
-    std::vector<rect_group> activeGroups;
-    for (auto& group : rectGroups) {
-        if (group.isActive) {
-            activeGroups.push_back(group);
-        }
-    }
-    std::copy(activeGroups.begin(), activeGroups.end(), rectGroups);
 }
