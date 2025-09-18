@@ -30,5 +30,8 @@
     <ClCompile Include="3_updated.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="4.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>
