@@ -49,6 +49,9 @@ int selectedRect = -1;      // 선택된 사각형 인덱스 (-1이면 선택 없음)
 bool followMode = false;    // 따라가기 모드 여부
 GLdouble targetX, targetY;  // 목표 위치
 
+// 초기 위치 저장용 배열 (m키를 위해)
+ret initialPos[5];
+
 // 이전 위치 저장용 배열 (순간이동을 위해)
 ret previousPos[5];
 
@@ -62,7 +65,7 @@ const GLdouble BOUNCE_SPEED = 3.0; // 이동 속도
 bool zigzagMode = false;    // 지그재그 모드 여부
 GLdouble zigzagSpeedX[5];   // 지그재그 X 방향 기본 속도
 GLdouble zigzagSpeedY[5];   // 지그재그 Y 방향 기본 속도 (아래/위로 이동)
-const GLdouble ZIGZAG_BASE_SPEED = 5.0; // 기본 이동 속도 (X축)
+const GLdouble ZIGZAG_BASE_SPEED = 8.0; // 기본 이동 속도 (X축)
 const GLdouble ZIGZAG_Y_SPEED = 10.0;   // Y 방향 기본 속도 (고정값 10.0!)
 
 // 형태 변화 모드용 변수
@@ -151,13 +154,43 @@ void UpdateRandomFollowAnimation() {
         }
     }
     else if (zigzagMode) {
-        // 2번 모드: 지그재그 (타겟 사각형만, 5번 모드 계수 제거)
-        showingrect[randomSelectedRect].x1 += zigzagSpeedX[randomSelectedRect];
-        showingrect[randomSelectedRect].x2 += zigzagSpeedX[randomSelectedRect];
+        // 2번 모드: 지그재그 (타겟 사각형만, 속도 5배 증가)
+        showingrect[randomSelectedRect].x1 += zigzagSpeedX[randomSelectedRect] * 5;
+        showingrect[randomSelectedRect].x2 += zigzagSpeedX[randomSelectedRect] * 5;
         
-        if (showingrect[randomSelectedRect].x1 <= 0 || showingrect[randomSelectedRect].x2 >= 500) {
+        GLdouble rectWidth = showingrect[randomSelectedRect].x2 - showingrect[randomSelectedRect].x1;
+        GLdouble rectHeight = showingrect[randomSelectedRect].y2 - showingrect[randomSelectedRect].y1;
+        
+        // X 방향 경계 충돌 처리 - 벽에 부딪힐 때만 Y축 이동!
+        if (showingrect[randomSelectedRect].x1 <= 0) {
+            showingrect[randomSelectedRect].x2 = rectWidth;
+            showingrect[randomSelectedRect].x1 = 0;
             zigzagSpeedX[randomSelectedRect] = -zigzagSpeedX[randomSelectedRect];
-            // 5번 모드에서는 Y 좌표 변경 없음 - 기본 지그재그 동작 유지
+            
+            // 벽에 부딪힐 때만 Y 좌표 이동 (지그재그 효과)
+            showingrect[randomSelectedRect].y1 += zigzagSpeedY[randomSelectedRect];
+            showingrect[randomSelectedRect].y2 += zigzagSpeedY[randomSelectedRect];
+        }
+        else if (showingrect[randomSelectedRect].x2 >= 500) {
+            showingrect[randomSelectedRect].x1 = 500 - rectWidth;
+            showingrect[randomSelectedRect].x2 = 500;
+            zigzagSpeedX[randomSelectedRect] = -zigzagSpeedX[randomSelectedRect];
+            
+            // 벽에 부딪힐 때만 Y 좌표 이동 (지그재그 효과)
+            showingrect[randomSelectedRect].y1 += zigzagSpeedY[randomSelectedRect];
+            showingrect[randomSelectedRect].y2 += zigzagSpeedY[randomSelectedRect];
+        }
+        
+        // Y 방향 경계 충돌 (5번 모드에서도 Y축 반전)
+        if (showingrect[randomSelectedRect].y1 <= 0) {
+            showingrect[randomSelectedRect].y2 = rectHeight;
+            showingrect[randomSelectedRect].y1 = 0;
+            zigzagSpeedY[randomSelectedRect] = abs(zigzagSpeedY[randomSelectedRect]);
+        }
+        else if (showingrect[randomSelectedRect].y2 >= 500) {
+            showingrect[randomSelectedRect].y1 = 500 - rectHeight;
+            showingrect[randomSelectedRect].y2 = 500;
+            zigzagSpeedY[randomSelectedRect] = -abs(zigzagSpeedY[randomSelectedRect]);
         }
     }
     else if (morphMode) {
@@ -572,6 +605,7 @@ void main(int argc, char** argv)
     // 배열 초기화 (빈 상태로)
     for (int i = 0; i < 5; ++i) {
         showingrect[i].x1 = -1; // 사용하지 않는 상태 표시
+        initialPos[i].x1 = -1; // 초기 위치도 초기화
         previousPos[i].x1 = -1; // 이전 위치도 초기화
         velocityX[i] = 0.0; // 속도 초기화
         velocityY[i] = 0.0;
@@ -725,6 +759,32 @@ void Keyboard(unsigned char key, int x, int y) {
             }
         }
         break;
+    case 's': // 모든 모드 끄기
+        followMode = false;
+        selectedRect = -1;
+        bounceMode = false;
+        zigzagMode = false;
+        morphMode = false;
+        colorMode = false;
+        randomFollowMode = false;
+        randomSelectedRect = -1;
+        break;
+    case 'm': // 모든 사각형을 초기 위치로 이동
+        for (int i = 0; i < rectCount; ++i) {
+            showingrect[i] = initialPos[i];
+        }
+        break;
+    case 'r': // 모든 사각형 삭제
+        rectCount = 0;
+        followMode = false;
+        selectedRect = -1;
+        bounceMode = false;
+        zigzagMode = false;
+        morphMode = false;
+        colorMode = false;
+        randomFollowMode = false;
+        randomSelectedRect = -1;
+        break;
 
     default:
         break;
@@ -763,6 +823,9 @@ void Mouse(int button, int state, int x, int y)
                 showingrect[rectCount].Rvalue = dis(gen) / 256.0f;
                 showingrect[rectCount].Gvalue = dis(gen) / 256.0f;
                 showingrect[rectCount].Bvalue = dis(gen) / 256.0f;
+                
+                // 초기 위치 저장 (m키 기능을 위해)
+                initialPos[rectCount] = showingrect[rectCount];
                 
                 // 대각선 이동 모드가 켜져있으면 새 사각형에도 랜덤 속도 부여
                 if (bounceMode) {
