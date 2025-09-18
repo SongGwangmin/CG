@@ -45,6 +45,8 @@ std::list<ret> rectlist;
 std::list<ret>::iterator rectlist_iter;
 int rectcount = 0;
 
+bool isLeftMousePressed = false; // 왼쪽 마우스 버튼이 눌린 상태인지 확인하는 변수
+
 ret morph(ret& after, ret& before) {
     int halfwidth = width / 2;
     int halfheight = height / 2;
@@ -107,6 +109,34 @@ void main(int argc, char** argv)
     width = glutGet(GLUT_WINDOW_WIDTH);
     height = glutGet(GLUT_WINDOW_HEIGHT);
 
+    // 처음에 20개의 사각형 생성
+    for (int i = 0; i < 20; ++i) {
+        ret newrect;
+        newrect.x1 = numdis(gen);
+        newrect.y1 = numdis(gen);
+        newrect.x2 = newrect.x1 + rectspace;
+        newrect.y2 = newrect.y1 + rectspace;
+        newrect.Rvalue = dis(gen) / 256.0f;
+        newrect.Gvalue = dis(gen) / 256.0f;
+        newrect.Bvalue = dis(gen) / 256.0f;
+        rectlist.push_back(newrect);
+        rectcount++;
+    }
+
+    // 새로운 특별한 사각형 생성 (크기는 원래의 2배)
+    ret specialRect;
+    specialRect.x1 = 250; // 화면 중앙 근처
+    specialRect.y1 = 250;
+    specialRect.x2 = specialRect.x1 + (rectspace * 2); // 가로 2배
+    specialRect.y2 = specialRect.y1 + (rectspace * 2); // 세로 2배
+    specialRect.Rvalue = 0.0f; // 검은색으로 설정
+    specialRect.Gvalue = 0.0f;
+    specialRect.Bvalue = 0.0f;
+    
+    rectlist.push_back(specialRect);
+    rectlist_iter = std::prev(rectlist.end()); // 마지막 요소를 가리킴
+    rectcount++;
+
     glutDisplayFunc(drawScene);
     glutReshapeFunc(Reshape);
     glutKeyboardFunc(Keyboard);
@@ -129,6 +159,11 @@ GLvoid drawScene()
     glPolygonMode(GL_BACK, GL_FILL);
 
     for (auto it = rectlist.begin(); it != rectlist.end(); ++it) {
+        // 특별한 사각형은 왼쪽 마우스 버튼이 눌린 상태에서만 표시
+        if (it == rectlist_iter && !isLeftMousePressed) {
+            continue; // 특별한 사각형을 건너뛰기
+        }
+        
         ret morphed;
         morph(morphed, *(it));
         glColor3f(it->Rvalue, it->Gvalue, it->Bvalue);
@@ -150,24 +185,42 @@ void Keyboard(unsigned char key, int x, int y) {
     case 'q': // 프로그램 종료
         glutLeaveMainLoop();
         break;
-    case 'a':
-    {
-        int i = 0;
-        while (rectcount < 30 && i < 10) {
-            ret* newrect = new ret;
-            newrect->x1 = numdis(gen);
-            newrect->y1 = numdis(gen);
-            newrect->x2 = newrect->x1 + rectspace;
-            newrect->y2 = newrect->y1 + rectspace;
-            newrect->Rvalue = dis(gen) / 256.0f;
-            newrect->Gvalue = dis(gen) / 256.0f;
-            newrect->Bvalue = dis(gen) / 256.0f;
-            rectlist.push_back(*newrect);
-            rectcount++;
-            i++;
+    case 'r': // 리셋: 모든 것을 초기 상태로 되돌리기
+        {
+            // 리스트 완전히 비우기
+            rectlist.clear();
+            rectcount = 0;
+            isLeftMousePressed = false;
+            
+            // 처음에 20개의 사각형 생성
+            for (int i = 0; i < 20; ++i) {
+                ret newrect;
+                newrect.x1 = numdis(gen);
+                newrect.y1 = numdis(gen);
+                newrect.x2 = newrect.x1 + rectspace;
+                newrect.y2 = newrect.y1 + rectspace;
+                newrect.Rvalue = dis(gen) / 256.0f;
+                newrect.Gvalue = dis(gen) / 256.0f;
+                newrect.Bvalue = dis(gen) / 256.0f;
+                rectlist.push_back(newrect);
+                rectcount++;
+            }
+
+            // 새로운 특별한 사각형 생성 (원래 크기로 복구)
+            ret specialRect;
+            specialRect.x1 = 250; // 화면 중앙 근처
+            specialRect.y1 = 250;
+            specialRect.x2 = specialRect.x1 + (rectspace * 2); // 가로 2배
+            specialRect.y2 = specialRect.y1 + (rectspace * 2); // 세로 2배
+            specialRect.Rvalue = 0.0f; // 검은색으로 설정
+            specialRect.Gvalue = 0.0f;
+            specialRect.Bvalue = 0.0f;
+            
+            rectlist.push_back(specialRect);
+            rectlist_iter = std::prev(rectlist.end()); // 마지막 요소를 가리킴
+            rectcount++; // 특별한 사각형도 카운트에 포함
+            break;
         }
-    }
-    break;
 
     default:
         break;
@@ -182,81 +235,132 @@ void Mouse(int button, int state, int x, int y)
     case GLUT_LEFT_BUTTON:
     {
         if (state == GLUT_DOWN) {
-            if (!rectlist.empty()) {
-                for (auto it = rectlist.rbegin(); it != rectlist.rend(); ++it) {
-                    if (ptinrect(x, y, *it)) {
-                        rectlist_iter = std::prev(it.base());
-                        mousexstart = x;
-                        mouseystart = y;
-                        break;
-                    }
-                    rectlist_iter = rectlist.end();
-                }
+            isLeftMousePressed = true;
+            // 특별한 사각형을 마우스 위치로 이동
+            if (rectlist_iter != rectlist.end()) {
+                GLdouble rectWidth = rectlist_iter->x2 - rectlist_iter->x1;
+                GLdouble rectHeight = rectlist_iter->y2 - rectlist_iter->y1;
+                rectlist_iter->x1 = x - rectWidth / 2;
+                rectlist_iter->y1 = y - rectHeight / 2;
+                rectlist_iter->x2 = rectlist_iter->x1 + rectWidth;
+                rectlist_iter->y2 = rectlist_iter->y1 + rectHeight;
+                glutPostRedisplay();
             }
         }
         else if (state == GLUT_UP) {
-            if (!rectlist.empty() && rectlist_iter != rectlist.end()) {
-                for (auto it = rectlist.begin(); it != rectlist.end(); ++it) {
-                    if (it != rectlist_iter && isColliding(*rectlist_iter, *it)) {
-                        // 더 작은 값으로 x1, y1 설정
-                        rectlist_iter->x1 = std::min(rectlist_iter->x1, it->x1);
-                        rectlist_iter->y1 = std::min(rectlist_iter->y1, it->y1);
-
-                        // 더 큰 값으로 x2, y2 설정
-                        rectlist_iter->x2 = std::max(rectlist_iter->x2, it->x2);
-                        rectlist_iter->y2 = std::max(rectlist_iter->y2, it->y2);
-
-                        // 새로운 색상 적용
-                        rectlist_iter->Rvalue = dis(gen) / 256.0f;
-                        rectlist_iter->Gvalue = dis(gen) / 256.0f;
-                        rectlist_iter->Bvalue = dis(gen) / 256.0f;
-
-                        // 충돌한 사각형 삭제
-                        rectlist.erase(it);
-                        rectcount--;
-                        break; // erase 후 반복자가 무효화되므로 루프 종료
-                    }
-                }
-                rectlist_iter = rectlist.end();
+            isLeftMousePressed = false;
+            // 마우스를 놓으면 특별한 사각형의 색상을 다시 검은색으로 변경
+            if (rectlist_iter != rectlist.end()) {
+                rectlist_iter->Rvalue = 0.0f;
+                rectlist_iter->Gvalue = 0.0f;
+                rectlist_iter->Bvalue = 0.0f;
             }
+            glutPostRedisplay();
         }
     }
     break;
     case GLUT_RIGHT_BUTTON:
     {
         if (state == GLUT_DOWN) {
-            if (!rectlist.empty()) {
-               
+            // rectcount가 20 미만이면 새로운 사각형 추가
+            if (rectcount < 20) {
+                ret newrect;
+                // 클릭한 위치를 중심으로 사각형 생성
+                newrect.x1 = x - rectspace / 2;
+                newrect.y1 = y - rectspace / 2;
+                newrect.x2 = x + rectspace / 2;
+                newrect.y2 = y + rectspace / 2;
+                
+                // 화면 경계를 벗어나지 않도록 조정
+                if (newrect.x1 < 0) {
+                    newrect.x2 += -newrect.x1;
+                    newrect.x1 = 0;
+                }
+                if (newrect.x2 > 500) {
+                    newrect.x1 -= (newrect.x2 - 500);
+                    newrect.x2 = 500;
+                }
+                if (newrect.y1 < 0) {
+                    newrect.y2 += -newrect.y1;
+                    newrect.y1 = 0;
+                }
+                if (newrect.y2 > 500) {
+                    newrect.y1 -= (newrect.y2 - 500);
+                    newrect.y2 = 500;
+                }
+                
+                newrect.Rvalue = dis(gen) / 256.0f;
+                newrect.Gvalue = dis(gen) / 256.0f;
+                newrect.Bvalue = dis(gen) / 256.0f;
+                
+                // 특별한 사각형 앞에 추가 (특별한 사각형이 마지막에 유지되도록)
+                rectlist.insert(rectlist_iter, newrect);
+                rectcount++;
+                
+                // 특별한 사각형 크기 감소 (x1, y1 5씩 증가, x2, y2 5씩 감소)
+                if (rectlist_iter != rectlist.end()) {
+                    rectlist_iter->x1 += 5;
+                    rectlist_iter->y1 += 5;
+                    rectlist_iter->x2 -= 5;
+                    rectlist_iter->y2 -= 5;
+                    
+                    // 사각형 크기가 너무 작아지지 않도록 최소 크기 보장
+                    if (rectlist_iter->x2 <= rectlist_iter->x1) {
+                        GLdouble centerX = (rectlist_iter->x1 + rectlist_iter->x2) / 2;
+                        rectlist_iter->x1 = centerX - 5;
+                        rectlist_iter->x2 = centerX + 5;
+                    }
+                    if (rectlist_iter->y2 <= rectlist_iter->y1) {
+                        GLdouble centerY = (rectlist_iter->y1 + rectlist_iter->y2) / 2;
+                        rectlist_iter->y1 = centerY - 5;
+                        rectlist_iter->y2 = centerY + 5;
+                    }
+                }
+                
+                glutPostRedisplay();
             }
         }
     }
     break;
     default:
         break;
-
     }
 }
 
 void Motion(int x, int y)
 {
-    if (!rectlist.empty()) {
-        if (mousexstart != -1) {
-            if (rectlist_iter != rectlist.end()) {
-                mousexend = x;
-                mouseyend = y;
-
-                int dx = mousexend - mousexstart;
-                int dy = mouseyend - mouseystart;
-                mousexstart = mousexend;
-                mouseystart = mouseyend;
-
-                rectlist_iter->x1 += dx;
-                rectlist_iter->y1 += dy;
-                rectlist_iter->x2 += dx;
-                rectlist_iter->y2 += dy;
-                glutPostRedisplay();
+    // 왼쪽 마우스 버튼이 눌린 상태에서 특별한 사각형을 마우스를 따라 이동
+    if (isLeftMousePressed && rectlist_iter != rectlist.end()) {
+        GLdouble rectWidth = rectlist_iter->x2 - rectlist_iter->x1;
+        GLdouble rectHeight = rectlist_iter->y2 - rectlist_iter->y1;
+        rectlist_iter->x1 = x - rectWidth / 2;
+        rectlist_iter->y1 = y - rectHeight / 2;
+        rectlist_iter->x2 = rectlist_iter->x1 + rectWidth;
+        rectlist_iter->y2 = rectlist_iter->y1 + rectHeight;
+        
+        // 다른 사각형들과의 충돌 검사
+        for (auto it = rectlist.begin(); it != rectlist.end(); ) {
+            if (it != rectlist_iter && isColliding(*rectlist_iter, *it)) {
+                // 충돌한 사각형의 색상을 특별한 사각형에 적용
+                rectlist_iter->Rvalue = it->Rvalue;
+                rectlist_iter->Gvalue = it->Gvalue;
+                rectlist_iter->Bvalue = it->Bvalue;
+                
+                // 특별한 사각형 크기 증가 (x1, y1 5씩 감소, x2, y2 5씩 증가)
+                rectlist_iter->x1 -= 5;
+                rectlist_iter->y1 -= 5;
+                rectlist_iter->x2 += 5;
+                rectlist_iter->y2 += 5;
+                
+                // 충돌한 사각형 삭제
+                it = rectlist.erase(it);
+                rectcount--;
+            } else {
+                ++it;
             }
         }
+        
+        glutPostRedisplay();
     }
 }
 
