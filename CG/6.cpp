@@ -167,7 +167,7 @@ GLvoid drawScene()
     drawsupport.y2 = 250;
 
     glPolygonMode(GL_BACK, GL_FILL);
-
+    // 개 윤곽 그리기
     for (auto it = rectlist.begin(); it != rectlist.end(); ++it) {
         ret morphed;
         morph(morphed, *(it));
